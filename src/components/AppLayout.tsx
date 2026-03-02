@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useState } from "react";
 
 const navItems = [
@@ -95,6 +96,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Button>
           <h1 className="text-lg font-semibold">{currentTitle}</h1>
           <div className="ml-auto flex items-center gap-2">
+            <NotificationBell />
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
