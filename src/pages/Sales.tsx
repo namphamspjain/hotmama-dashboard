@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   DollarSign, TrendingUp, ShoppingCart, Package, RotateCcw, Clock,
-  Plus, Search, ArrowUpDown, ArrowUp, ArrowDown,
+  Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
   formatCurrency, getRetailerName,
 } from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
+import { downloadCSV } from "@/lib/csv";
 
 type SortField = "id" | "saleDate" | "revenue" | "netProfit";
 type SortDir = "asc" | "desc";
@@ -209,11 +210,20 @@ export default function SalesPage() {
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-lg">Sales</CardTitle>
-            {canEdit && (
-              <Button size="sm" onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> New Sale
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => {
+                const headers = ["Sale ID", "Retailer", "Product", "Type", "Qty", "Selling Price", "Wholesale Price", "Delivery Fee", "Revenue", "Net Profit", "Delivery", "Sale Date"];
+                const rows = filtered.map((sl) => [sl.id, getRetailerName(sl.retailerId), sl.productName, sl.productType, String(sl.quantity), String(sl.sellingPrice), String(sl.wholesalePrice), String(sl.deliveryFee), String(sl.revenue), String(sl.netProfit), sl.deliveryStatus, sl.saleDate]);
+                downloadCSV("sales.csv", headers, rows);
+              }}>
+                <Download className="h-4 w-4 mr-1" /> Export CSV
               </Button>
-            )}
+              {canEdit && (
+                <Button size="sm" onClick={() => setDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> New Sale
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

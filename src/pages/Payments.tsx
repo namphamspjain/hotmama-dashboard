@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { payments as initialPayments, type Payment, type PayStatus, formatCurrency } from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowUpDown, Search, AlertTriangle, CheckCircle2, Clock, DollarSign } from "lucide-react";
+import { ArrowUpDown, Search, AlertTriangle, CheckCircle2, Clock, DollarSign, Download } from "lucide-react";
+import { downloadCSV } from "@/lib/csv";
 
 type SortKey = "id" | "amount" | "dueDate";
 type SortDir = "asc" | "desc";
@@ -164,6 +165,14 @@ const PaymentsPage = () => {
             <SelectItem value="overdue">Overdue</SelectItem>
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={() => {
+          const all = [...agentPayments, ...retailerPayments];
+          const headers = ["Payment ID", "Type", "Partner", "Linked Ref", "Amount", "Status", "Due Date", "Paid Date"];
+          const rows = all.map((p) => [p.id, p.type, p.partnerName, p.linkedId, String(p.amount), p.status, p.dueDate, p.paidDate ?? ""]);
+          downloadCSV("payments.csv", headers, rows);
+        }}>
+          <Download className="h-4 w-4 mr-1" /> Export CSV
+        </Button>
       </div>
 
       <Tabs defaultValue="agents">

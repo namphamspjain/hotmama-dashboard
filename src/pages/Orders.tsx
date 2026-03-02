@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Package, Ship, CheckCircle2, AlertTriangle, DollarSign, Truck, Users,
-  Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink,
+  Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   formatCurrency, getSupplierName, getAgentName,
 } from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
+import { downloadCSV } from "@/lib/csv";
 
 type SortField = "id" | "orderDate" | "quantity" | "importCostPhp";
 type SortDir = "asc" | "desc";
@@ -181,11 +182,20 @@ export default function OrdersPage() {
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-lg">Orders</CardTitle>
-            {canEdit && (
-              <Button size="sm" onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> New Order
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => {
+                const headers = ["Order ID", "Supplier", "Agent", "Product", "Type", "Qty", "Import Cost (PHP)", "Shipping", "Payment", "Order Date", "Receival Date", "Notes"];
+                const rows = filtered.map((o) => [o.id, getSupplierName(o.supplierId), getAgentName(o.agentId), o.productName, o.productType, String(o.quantity), String(o.importCostPhp), o.shippingStatus, o.payStatus, o.orderDate, o.receivalDate ?? "", o.notes ?? ""]);
+                downloadCSV("orders.csv", headers, rows);
+              }}>
+                <Download className="h-4 w-4 mr-1" /> Export CSV
               </Button>
-            )}
+              {canEdit && (
+                <Button size="sm" onClick={() => setDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> New Order
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
