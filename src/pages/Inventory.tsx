@@ -1,6 +1,18 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Package, CheckCircle2, AlertTriangle, XCircle, Search, ArrowUpDown, ArrowUp, ArrowDown, Pencil,
+  Package,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Trash2,
+  Download,
+  Plus,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,12 +30,33 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  BarChart,
+  Bar,
 } from "recharts";
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  inventory as mockInventory, InventoryItem, InventoryStatus,
+  inventory as mockInventory,
+  InventoryItem,
+  InventoryStatus,
+  orders,
+  formatCurrency,
 } from "@/data/mock-data";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { downloadCSV } from "@/lib/csv";
 
 type SortField = "id" | "productName" | "receivalDate";
 type SortDir = "asc" | "desc";
@@ -37,9 +70,33 @@ const statusConfig: Record<InventoryStatus, { label: string; cls: string; icon: 
 const STATUS_COLORS = ["hsl(160, 60%, 45%)", "hsl(40, 90%, 50%)", "hsl(0, 70%, 55%)"];
 const TYPE_COLORS = ["hsl(220, 70%, 55%)", "hsl(280, 60%, 55%)", "hsl(340, 65%, 55%)", "hsl(30, 80%, 55%)", "hsl(170, 60%, 45%)"];
 
+const emptyForm = {
+  productId: "",
+  orderId: "",
+  receivalDate: new Date().toISOString().slice(0, 10),
+  productType: "",
+  productName: "",
+  status: "good" as InventoryStatus,
+  notes: "",
+};
+
+const getNextProductId = (items: InventoryItem[]): string => {
+  let max = 0;
+  items.forEach((i) => {
+    const match = i.id.match(/^PRD-(\d+)$/);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n > max) max = n;
+    }
+  });
+  const next = max + 1;
+  return `PRD-${String(next).padStart(3, "0")}`;
+};
+
 export default function InventoryPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "editor";
+  const navigate = useNavigate();
 
   const [items, setItems] = useState<InventoryItem[]>(mockInventory);
   const [search, setSearch] = useState("");
@@ -47,19 +104,40 @@ export default function InventoryPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
+  });
 
-  // edit dialog
-  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
-  const [editStatus, setEditStatus] = useState<InventoryStatus>("good");
-  const [editNotes, setEditNotes] = useState("");
+  // new / edit dialog
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<typeof emptyForm>(emptyForm);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+
+  const visibleItems = useMemo(() => {
+    if (!dateRange.from && !dateRange.to) return items;
+    const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
+    const toTs = dateRange.to ? dateRange.to.setHours(23, 59, 59, 999) : null;
+    return items.filter((i) => {
+      const d = new Date(i.receivalDate);
+      const ts = d.getTime();
+      if (Number.isNaN(ts)) return true;
+      if (fromTs !== null && ts < fromTs) return false;
+      if (toTs !== null && ts > toTs) return false;
+      return true;
+    });
+  }, [items, dateRange.from, dateRange.to]);
 
   // metrics
-  const metrics = useMemo(() => ({
-    total: items.length,
-    good: items.filter((i) => i.status === "good").length,
-    damaged: items.filter((i) => i.status === "damaged").length,
-    lost: items.filter((i) => i.status === "lost").length,
-  }), [items]);
+  const metrics = useMemo(
+    () => ({
+      total: visibleItems.length,
+      good: visibleItems.filter((i) => i.status === "good").length,
+      damaged: visibleItems.filter((i) => i.status === "damaged").length,
+      lost: visibleItems.filter((i) => i.status === "lost").length,
+    }),
+    [visibleItems],
+  );
 
   // chart data
   const statusChartData = useMemo(() => [
@@ -70,15 +148,63 @@ export default function InventoryPage() {
 
   const typeChartData = useMemo(() => {
     const map: Record<string, number> = {};
-    items.forEach((i) => { map[i.productType] = (map[i.productType] || 0) + 1; });
+    visibleItems.forEach((i) => {
+      map[i.productType] = (map[i.productType] || 0) + 1;
+    });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [items]);
+  }, [visibleItems]);
 
-  const productTypes = useMemo(() => [...new Set(items.map((i) => i.productType))], [items]);
+  const damagedLostTrendData = useMemo(() => {
+    const byDate: Record<string, { damaged: number; lost: number }> = {};
+    visibleItems.forEach((i) => {
+      if (i.status !== "damaged" && i.status !== "lost") return;
+      const key = i.receivalDate;
+      if (!byDate[key]) {
+        byDate[key] = { damaged: 0, lost: 0 };
+      }
+      if (i.status === "damaged") {
+        byDate[key].damaged += 1;
+      } else if (i.status === "lost") {
+        byDate[key].lost += 1;
+      }
+    });
+    return Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, value]) => ({ date, ...value }));
+  }, [visibleItems]);
+
+  const orderCostMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    orders.forEach((o) => {
+      if (o.quantity > 0) {
+        map[o.id] = Math.round(o.importCostPhp / o.quantity);
+      }
+    });
+    return map;
+  }, []);
+
+  const lossCostData = useMemo(() => {
+    const byDate: Record<string, number> = {};
+    visibleItems.forEach((i) => {
+      if (i.status !== "damaged" && i.status !== "lost") return;
+      const unitCost = orderCostMap[i.orderId];
+      if (!unitCost) return;
+      const key = i.receivalDate;
+      byDate[key] = (byDate[key] || 0) + unitCost;
+    });
+    return Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, totalLoss]) => ({ date, totalLoss }));
+  }, [visibleItems, orderCostMap]);
+
+  const productTypes = useMemo(
+    () => [...new Set(items.map((i) => i.productType))],
+    [items],
+  );
 
   // filter + sort
   const filtered = useMemo(() => {
-    let list = [...items];
+    let list = [...visibleItems];
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((i) => i.id.toLowerCase().includes(q) || i.productName.toLowerCase().includes(q));
@@ -93,7 +219,7 @@ export default function InventoryPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [items, search, statusFilter, typeFilter, sortField, sortDir]);
+  }, [visibleItems, search, statusFilter, typeFilter, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -106,17 +232,46 @@ export default function InventoryPage() {
   };
 
   const openEdit = (item: InventoryItem) => {
-    setEditItem(item);
-    setEditStatus(item.status);
-    setEditNotes(item.notes || "");
+    setEditingItem(item);
+    setForm({
+      productId: item.id,
+      orderId: item.orderId,
+      receivalDate: item.receivalDate,
+      productType: item.productType,
+      productName: item.productName,
+      status: item.status,
+      notes: item.notes ?? "",
+    });
+    setDialogOpen(true);
   };
 
-  const saveEdit = () => {
-    if (!editItem) return;
-    setItems((prev) =>
-      prev.map((i) => (i.id === editItem.id ? { ...i, status: editStatus, notes: editNotes || undefined } : i))
-    );
-    setEditItem(null);
+  const handleSubmit = () => {
+    if (!form.orderId || !form.productName || !form.productType || !form.receivalDate) return;
+    const id = editingItem ? editingItem.id : form.productId || getNextProductId(items);
+    const nextItem: InventoryItem = {
+      id,
+      orderId: form.orderId,
+      receivalDate: form.receivalDate,
+      productType: form.productType,
+      productName: form.productName,
+      status: form.status,
+      notes: form.notes || undefined,
+    };
+    if (editingItem) {
+      setItems((prev) => prev.map((i) => (i.id === editingItem.id ? nextItem : i)));
+    } else {
+      setItems((prev) => [nextItem, ...prev]);
+    }
+    setDialogOpen(false);
+    setEditingItem(null);
+    setForm({
+      ...emptyForm,
+      productId: getNextProductId(items),
+    });
+  };
+
+  const handleDeleteItem = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
   const metricCards = [
@@ -137,16 +292,117 @@ export default function InventoryPage() {
                 <span className="text-xs font-medium text-muted-foreground">{m.label}</span>
                 <m.icon className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-2xl font-bold">{m.value}</p>
+              <p
+                className={cn(
+                  "text-2xl font-bold",
+                  m.label === "Damaged" && "text-amber-500",
+                  m.label === "Lost" && "text-red-500",
+                )}
+              >
+                {m.value}
+              </p>
+              <p
+                className={cn(
+                  "text-xs",
+                  m.label === "Damaged"
+                    ? "text-amber-500"
+                    : m.label === "Lost"
+                    ? "text-red-500"
+                    : "text-muted-foreground",
+                )}
+              >
+                products
+              </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* Global date range filter (applies to metrics, charts, and table) */}
+      <div className="flex justify-start">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="justify-start text-left font-normal w-full sm:w-[220px]"
+            >
+              <span className="mr-2 text-xs font-medium text-muted-foreground">Date</span>
+              {dateRange.from && dateRange.to ? (
+                <span className="text-xs">
+                  {dateRange.from.toLocaleDateString()} – {dateRange.to.toLocaleDateString()}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">All time</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <div className="flex">
+              {/* Presets sidebar */}
+              <div className="flex flex-col border-r bg-muted/40 p-3 gap-1 min-w-[140px]">
+                {[
+                  { label: "Today", days: 0 },
+                  { label: "Last 7 days", days: 7 },
+                  { label: "Last 30 days", days: 30 },
+                  { label: "Last 3 months", days: 90 },
+                  { label: "Last 6 months", days: 180 },
+                  { label: "All year", days: 365 },
+                  { label: "All time", days: null },
+                ].map((preset) => (
+                  <Button
+                    key={preset.label}
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start text-xs"
+                    onClick={() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      if (preset.days === null) {
+                        setDateRange({ from: null, to: null });
+                      } else if (preset.days === 0) {
+                        setDateRange({ from: today, to: today });
+                      } else {
+                        const from = new Date(today);
+                        from.setDate(from.getDate() - (preset.days - 1));
+                        setDateRange({ from, to: today });
+                      }
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+              {/* Calendar */}
+              <div className="p-3">
+                <Calendar
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={(range) => {
+                    if (!range) {
+                      setDateRange({ from: null, to: null });
+                      return;
+                    }
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const rawFrom = range.from ?? today;
+                    const rawTo = range.to ?? rawFrom;
+                    const from = new Date(Math.min(rawFrom.getTime(), today.getTime()));
+                    const to = new Date(Math.min(rawTo.getTime(), today.getTime()));
+                    setDateRange({ from, to });
+                  }}
+                  disabled={(date) => date > new Date()}
+                  numberOfMonths={2}
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status Distribution</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Status Distribution</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -160,7 +416,7 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">By Product Type</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">By Product Type</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -175,10 +431,121 @@ export default function InventoryPage() {
         </Card>
       </div>
 
+      {/* Damaged & Lost trend and loss cost charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Damaged &amp; Lost Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={damagedLostTrendData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="date" className="text-xs fill-muted-foreground" />
+                <YAxis className="text-xs fill-muted-foreground" />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="damaged"
+                  name="Damaged"
+                  stroke="hsl(40, 90%, 50%)"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="lost"
+                  name="Lost"
+                  stroke="hsl(0, 70%, 55%)"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Cost of Loss</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={lossCostData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="date" className="text-xs fill-muted-foreground" />
+                <YAxis
+                  className="text-xs fill-muted-foreground"
+                  tickFormatter={(v) => formatCurrency(v as number)}
+                />
+                <Tooltip
+                  formatter={(value: number) => formatCurrency(value)}
+                  labelFormatter={(label: string) => `Date: ${label}`}
+                />
+                <Legend />
+                <Bar
+                  dataKey="totalLoss"
+                  name="Cost of Loss"
+                  fill="hsl(0, 70%, 55%)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Table */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Inventory Items</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-lg">Inventory Items</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const headers = [
+                    "Product ID",
+                    "Product Type",
+                    "Product Name",
+                    "Status",
+                    "Order ID",
+                    "Receival Date",
+                    "Notes",
+                  ];
+                  const rows = filtered.map((item) => [
+                    item.id,
+                    item.productType,
+                    item.productName,
+                    item.status,
+                    item.orderId,
+                    item.receivalDate,
+                    item.notes ?? "",
+                  ]);
+                  downloadCSV("inventory.csv", headers, rows);
+                }}
+              >
+                <Download className="h-4 w-4 mr-1" /> Export CSV
+              </Button>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const nextId = getNextProductId(items);
+                    setEditingItem(null);
+                    setForm({
+                      ...emptyForm,
+                      productId: nextId,
+                    });
+                    setDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" /> New Item
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -211,23 +578,23 @@ export default function InventoryPage() {
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("id")}>
                     <span className="flex items-center">Product ID <SortIcon field="id" /></span>
                   </TableHead>
+                  <TableHead>Product Type</TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("productName")}>
-                    <span className="flex items-center">Product <SortIcon field="productName" /></span>
+                    <span className="flex items-center">Product Name <SortIcon field="productName" /></span>
                   </TableHead>
-                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Order ID</TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("receivalDate")}>
                     <span className="flex items-center">Receival Date <SortIcon field="receivalDate" /></span>
                   </TableHead>
                   <TableHead>Notes</TableHead>
-                  {canEdit && <TableHead className="w-10" />}
+                  {canEdit && <TableHead className="w-16" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 8 : 7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={canEdit ? 9 : 8} className="text-center py-12 text-muted-foreground">
                       <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
                       No inventory items found.
                     </TableCell>
@@ -236,19 +603,62 @@ export default function InventoryPage() {
                   filtered.map((item) => {
                     const sc = statusConfig[item.status];
                     return (
-                      <TableRow key={item.id}>
+                      <TableRow key={item.id} className={canEdit ? "group" : undefined}>
                         <TableCell className="font-mono text-xs font-medium">{item.id}</TableCell>
+                        <TableCell className="text-sm font-medium">{item.productType}</TableCell>
                         <TableCell className="text-sm font-medium">{item.productName}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{item.productType}</TableCell>
-                        <TableCell><Badge variant="outline" className={sc.cls}>{sc.label}</Badge></TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{item.orderId}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={sc.cls}>
+                            {sc.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          <button
+                            type="button"
+                            className="underline-offset-2 hover:underline"
+                            onClick={() => navigate("/orders", { state: { highlightOrderId: item.orderId } })}
+                          >
+                            {item.orderId}
+                          </button>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{item.receivalDate}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">{item.notes || "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">
+                          {item.notes || "—"}
+                        </TableCell>
                         {canEdit && (
-                          <TableCell>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                          <TableCell className="text-right align-middle">
+                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                    onClick={() => openEdit(item)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Edit</p>
+                                </TooltipContent>
+                              </UiTooltip>
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleDeleteItem(item.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Delete</p>
+                                </TooltipContent>
+                              </UiTooltip>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
@@ -262,33 +672,144 @@ export default function InventoryPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editItem} onOpenChange={(open) => !open && setEditItem(null)}>
-        <DialogContent className="max-w-sm">
+      {/* New / Edit Item Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingItem(null);
+            setForm({
+              ...emptyForm,
+              productId: getNextProductId(items),
+            });
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit {editItem?.id}</DialogTitle>
-            <DialogDescription>{editItem?.productName}</DialogDescription>
+            <DialogTitle>{editingItem ? "Edit Item" : "New Item"}</DialogTitle>
+            <DialogDescription>
+              {editingItem
+                ? editingItem.productName
+                : "Add a new inventory item. Product ID is generated automatically."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={editStatus} onValueChange={(v) => setEditStatus(v as InventoryStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="good">Good</SelectItem>
-                  <SelectItem value="damaged">Damaged</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Product ID</Label>
+                <Input value={form.productId} disabled />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center justify-between">
+                  <span>Order ID</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="h-6 px-2 text-xs"
+                    disabled={!form.orderId}
+                    onClick={() => {
+                      if (!form.orderId) return;
+                      navigate("/orders", { state: { highlightOrderId: form.orderId } });
+                    }}
+                  >
+                    View in Orders
+                  </Button>
+                </Label>
+                <Input
+                  value={form.orderId}
+                  onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
+                  placeholder="e.g. OD-20260110-001"
+                />
+              </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Receival Date</Label>
+                <Input
+                  type="date"
+                  value={form.receivalDate}
+                  onChange={(e) => setForm((f) => ({ ...f, receivalDate: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) => setForm((f) => ({ ...f, status: v as InventoryStatus }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="good">Good</SelectItem>
+                    <SelectItem value="damaged">Damaged</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Product Type</Label>
+                <Select
+                  value={form.productType}
+                  onValueChange={(v) => setForm((f) => ({ ...f, productType: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productTypes.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Product Name</Label>
+                <Input
+                  value={form.productName}
+                  onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))}
+                  placeholder="e.g. iPhone 15 Pro Max 256GB"
+                />
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label>Notes</Label>
-              <Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Damage description..." rows={3} />
+              <Textarea
+                value={form.notes}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="Damage description, location, etc."
+                rows={3}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditItem(null)}>Cancel</Button>
-            <Button onClick={saveEdit}>Save</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDialogOpen(false);
+                setEditingItem(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                !form.orderId || !form.productName || !form.productType || !form.receivalDate
+              }
+            >
+              {editingItem ? "Save Changes" : "Create Item"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

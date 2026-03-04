@@ -88,7 +88,7 @@ function MetricCard({ title, value, subtitle, icon: Icon, onClick, badge }: Metr
   return (
     <Card className={onClick ? "cursor-pointer transition-shadow hover:shadow-md" : ""} onClick={onClick}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
@@ -153,7 +153,7 @@ const DashboardPage = () => {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Revenue & Profit trend */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Revenue & Profit Trend</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-semibold">Revenue & Profit Trend</CardTitle></CardHeader>
           <CardContent className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueProfitTrend}>
@@ -181,7 +181,7 @@ const DashboardPage = () => {
 
         {/* Orders trend */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Orders Trend</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-semibold">Orders Trend</CardTitle></CardHeader>
           <CardContent className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={ordersTrend}>
@@ -197,7 +197,7 @@ const DashboardPage = () => {
 
         {/* Revenue by Retailer */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Revenue by Retailer</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-semibold">Revenue by Retailer</CardTitle></CardHeader>
           <CardContent className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueByRetailer} layout="vertical">
@@ -213,7 +213,7 @@ const DashboardPage = () => {
 
         {/* Inventory status pie */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Inventory Status</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-semibold">Inventory Status</CardTitle></CardHeader>
           <CardContent className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -233,7 +233,7 @@ const DashboardPage = () => {
         {/* Recent orders */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base">Recent Orders</CardTitle>
+            <CardTitle className="text-base font-semibold">Recent Orders</CardTitle>
             <button onClick={() => navigate("/orders")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               View all <ArrowRight className="h-3 w-3" />
             </button>
@@ -262,7 +262,7 @@ const DashboardPage = () => {
         {/* Overdue payments */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base">Overdue Payments</CardTitle>
+            <CardTitle className="text-base font-semibold">Overdue Payments</CardTitle>
             <button onClick={() => navigate("/payments")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               View all <ArrowRight className="h-3 w-3" />
             </button>
@@ -289,7 +289,7 @@ const DashboardPage = () => {
         {/* Pending sales */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base">Pending Deliveries</CardTitle>
+            <CardTitle className="text-base font-semibold">Pending Deliveries</CardTitle>
             <button onClick={() => navigate("/sales")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               View all <ArrowRight className="h-3 w-3" />
             </button>

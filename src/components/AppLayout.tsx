@@ -4,7 +4,20 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { getOverduePaymentsCount } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, ShoppingCart, Package, TrendingUp, CreditCard, Settings, LogOut, Sun, Moon, Menu, X, ChevronLeft, ChevronRight,
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  TrendingUp,
+  CreditCard,
+  Settings,
+  LogOut,
+  Sun,
+  Moon,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  PanelLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +42,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const overdueCount = getOverduePaymentsCount();
 
   const currentTitle = navItems.find((n) => n.path === location.pathname)?.title ?? "JedOMS";
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .filter((part) => part.length > 0)
+        .slice(0, 2)
+        .map((part) => part[0]!.toUpperCase())
+        .join("")
+    : "";
 
   return (
     <div className="flex min-h-screen w-full">
@@ -79,12 +100,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Collapse toggle (desktop) */}
-        <div className="hidden border-t border-sidebar-border p-2 lg:block">
-          <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="w-full text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50">
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
-        </div>
       </aside>
 
       {/* Main content */}
@@ -95,20 +110,64 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           collapsed ? "lg:left-16" : "lg:left-60",
           "left-0"
         )}>
-          <Button variant="ghost" size="icon" className="lg:hidden text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50" onClick={() => setMobileOpen(true)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50"
+            onClick={() => setMobileOpen(true)}
+          >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold text-sidebar-primary">{currentTitle}</h1>
-          <div className="ml-auto flex items-center gap-2">
-            <NotificationBell />
-            <Button variant="ghost" size="icon" onClick={toggleTheme} className="text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50">
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden lg:inline-flex text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50"
+              onClick={() => setCollapsed((prev) => !prev)}
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1 text-sm md:text-base">
+              <span
+                className={cn(
+                  "font-medium",
+                  location.pathname === "/" ? "text-sidebar-primary" : "text-sidebar-muted",
+                )}
+              >
+                Dashboard
+              </span>
+              {location.pathname !== "/" && (
+                <>
+                  <ChevronRight className="h-3 w-3 text-sidebar-muted" />
+                  <span className="font-semibold text-sidebar-primary">{currentTitle}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50"
+            >
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
+            <NotificationBell />
+            <div className="h-7 w-px bg-sidebar-border mx-1" />
             {user && (
               <div className="flex items-center gap-2">
-                <div className="hidden text-right text-sm md:block">
-                  <p className="font-medium leading-tight text-sidebar-primary">{user.name}</p>
-                  <Badge variant="secondary" className="text-xs capitalize">{user.role}</Badge>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500 text-xs font-semibold text-black">
+                    {initials || "AU"}
+                  </div>
+                  <div className="hidden text-right text-sm md:block">
+                    <p className="font-medium leading-tight text-sidebar-primary">{user.name}</p>
+                    <Badge variant="secondary" className="text-xs capitalize">
+                      {user.role}
+                    </Badge>
+                  </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={logout} title="Sign out" className="text-sidebar-muted hover:text-sidebar-primary hover:bg-sidebar-accent/50">
                   <LogOut className="h-4 w-4" />
