@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   payments as initialPayments,
   orders,
@@ -23,29 +25,44 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { ArrowUpDown, Search, AlertTriangle, CheckCircle2, Clock, DollarSign, Download, Pencil, Trash2, Plus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  Legend,
+} from "recharts";
 import { downloadCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 
 type SortKey = "id" | "amount" | "dueDate";
 type SortDir = "asc" | "desc";
 
+const AGENT_PIE_COLORS = ["hsl(160, 60%, 45%)", "hsl(40, 90%, 50%)"];
+const RETAILER_PIE_COLORS = ["hsl(220, 70%, 55%)", "hsl(340, 65%, 55%)"];
+
+const agentPayBadge: Record<PayStatus, { label: string; cls: string }> = {
+  paid: { label: "Paid", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  unpaid: { label: "Unpaid", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  overdue: { label: "Overdue", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+};
+
+const retailerPayBadge: Record<RetailerPayStatus, { label: string; cls: string }> = {
+  unsold: { label: "Unsold", cls: "bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-300" },
+  pending: { label: "Pending", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  sold: { label: "Sold", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  refunded: { label: "Refunded", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+};
+
 const statusBadgeAgent = (s: PayStatus) => {
-  switch (s) {
-    case "paid": return <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">Paid</Badge>;
-    case "unpaid": return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 hover:bg-amber-500/20">Unpaid</Badge>;
-    case "overdue": return <Badge className="bg-red-500/15 text-red-600 border-red-500/30 hover:bg-red-500/20">Overdue</Badge>;
-    default: return null;
-  }
+  const cfg = agentPayBadge[s];
+  return <Badge variant="outline" className={cfg.cls}>{cfg.label}</Badge>;
 };
 
 const statusBadgeRetailer = (s: RetailerPayStatus) => {
-  switch (s) {
-    case "unsold": return <Badge className="bg-slate-500/15 text-slate-600 border-slate-500/30 hover:bg-slate-500/20">Unsold</Badge>;
-    case "pending": return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 hover:bg-amber-500/20">Pending</Badge>;
-    case "sold": return <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">Sold</Badge>;
-    case "refunded": return <Badge className="bg-red-500/15 text-red-600 border-red-500/30 hover:bg-red-500/20">Refunded</Badge>;
-    default: return null;
-  }
+  const cfg = retailerPayBadge[s];
+  return <Badge variant="outline" className={cfg.cls}>{cfg.label}</Badge>;
 };
 
 const getDisplayPayId = (p: Payment): string => {
@@ -88,6 +105,7 @@ const PaymentsPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("dueDate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({ from: null, to: null });
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -97,8 +115,23 @@ const PaymentsPage = () => {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
+  const visiblePayments = useMemo(() => {
+    if (!dateRange.from && !dateRange.to) return data;
+    const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
+    const toTs = dateRange.to ? dateRange.to.setHours(23, 59, 59, 999) : null;
+    return data.filter((p) => {
+      const dateStr = getOrderDate(p);
+      const d = new Date(dateStr);
+      const ts = d.getTime();
+      if (Number.isNaN(ts)) return true;
+      if (fromTs !== null && ts < fromTs) return false;
+      if (toTs !== null && ts > toTs) return false;
+      return true;
+    });
+  }, [data, dateRange.from, dateRange.to]);
+
   const filterAndSort = (type: "agent" | "retailer") => {
-    let filtered = data.filter((p) => p.type === type);
+    let filtered = visiblePayments.filter((p) => p.type === type);
     if (search) {
       const q = search.toLowerCase();
       filtered = filtered.filter(
@@ -132,17 +165,32 @@ const PaymentsPage = () => {
   const retailerPayments = filterAndSort("retailer");
 
   const metrics = useMemo(() => {
-    const agents = data.filter(p => p.type === "agent");
-    const retailers = data.filter(p => p.type === "retailer");
+    const agents = visiblePayments.filter(p => p.type === "agent");
+    const retailers = visiblePayments.filter(p => p.type === "retailer");
+
+    const agentFeesTotal = agents
+      .filter(p => p.status === "unpaid" || p.status === "paid")
+      .reduce((s, p) => s + p.amount, 0);
+
+    const agentFeesPaid = agents
+      .filter(p => p.status === "paid")
+      .reduce((s, p) => s + p.amount, 0);
+
+    const retailerReceivables = retailers
+      .filter(p => p.status === "pending" || p.status === "sold")
+      .reduce((s, p) => s + p.amount, 0);
+
+    const retailerCollected = retailers
+      .filter(p => p.status === "sold")
+      .reduce((s, p) => s + p.amount, 0);
+
     return {
-      agentTotal: agents.reduce((s, p) => s + p.amount, 0),
-      agentPaid: agents.filter(p => p.status === "paid").reduce((s, p) => s + p.amount, 0),
-      agentOverdue: agents.filter(p => p.status === "overdue").length,
-      retailerTotal: retailers.reduce((s, p) => s + p.amount, 0),
-      retailerPaid: retailers.filter(p => p.status === "paid").reduce((s, p) => s + p.amount, 0),
-      retailerOverdue: retailers.filter(p => p.status === "overdue").length,
+      agentTotal: agentFeesTotal,
+      agentPaid: agentFeesPaid,
+      retailerTotal: retailerReceivables,
+      retailerPaid: retailerCollected,
     };
-  }, [data]);
+  }, [visiblePayments]);
 
   const openNewPayment = () => {
     setEditingPayment(null);
@@ -304,24 +352,177 @@ const PaymentsPage = () => {
   const metricCards = [
     { title: "Agent Fees Total", value: formatCurrency(metrics.agentTotal), icon: DollarSign },
     { title: "Agent Fees Paid", value: formatCurrency(metrics.agentPaid), icon: CheckCircle2 },
-    { title: "Agent Overdue", value: metrics.agentOverdue, icon: AlertTriangle },
     { title: "Retailer Receivables", value: formatCurrency(metrics.retailerTotal), icon: DollarSign },
     { title: "Retailer Collected", value: formatCurrency(metrics.retailerPaid), icon: CheckCircle2 },
-    { title: "Retailer Overdue", value: metrics.retailerOverdue, icon: AlertTriangle },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {metricCards.map(m => (
           <Card key={m.title}>
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-medium text-muted-foreground">{m.title}</CardTitle>
               <m.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent><div className="text-xl font-bold">{m.value}</div></CardContent>
+            <CardContent>
+              <div
+                className={cn(
+                  "text-xl font-bold",
+                  m.title === "Agent Fees Paid" &&
+                    (metrics.agentPaid === metrics.agentTotal ? "text-emerald-500" : "text-amber-500"),
+                  m.title === "Retailer Collected" &&
+                    (metrics.retailerPaid === metrics.retailerTotal ? "text-emerald-500" : "text-amber-500"),
+                )}
+              >
+                {m.value}
+              </div>
+            </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="flex justify-start">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="justify-start text-left font-normal w-full sm:w-[220px]"
+            >
+              <span className="mr-2 text-xs font-medium text-muted-foreground">Date</span>
+              {dateRange.from && dateRange.to ? (
+                <span className="text-xs">
+                  {dateRange.from.toLocaleDateString()} – {dateRange.to.toLocaleDateString()}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">All time</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <div className="flex">
+              <div className="flex flex-col border-r bg-muted/40 p-3 gap-1 min-w-[140px]">
+                {[
+                  { label: "Today", days: 0 },
+                  { label: "Last 7 days", days: 7 },
+                  { label: "Last 30 days", days: 30 },
+                  { label: "Last 3 months", days: 90 },
+                  { label: "Last 6 months", days: 180 },
+                  { label: "All year", days: 365 },
+                  { label: "All time", days: null },
+                ].map((preset) => (
+                  <Button
+                    key={preset.label}
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start text-xs"
+                    onClick={() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      if (preset.days === null) {
+                        setDateRange({ from: null, to: null });
+                      } else if (preset.days === 0) {
+                        setDateRange({ from: today, to: today });
+                      } else {
+                        const from = new Date(today);
+                        from.setDate(from.getDate() - (preset.days - 1));
+                        setDateRange({ from, to: today });
+                      }
+                    }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="p-3">
+                <Calendar
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={(range) => {
+                    if (!range) {
+                      setDateRange({ from: null, to: null });
+                      return;
+                    }
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const rawFrom = range.from ?? today;
+                    const rawTo = range.to ?? rawFrom;
+                    const from = new Date(Math.min(rawFrom.getTime(), today.getTime()));
+                    const to = new Date(Math.min(rawTo.getTime(), today.getTime()));
+                    setDateRange({ from, to });
+                  }}
+                  disabled={(date) => date > new Date()}
+                  numberOfMonths={2}
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Agent Payment Status</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[260px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: "Paid", value: metrics.agentPaid },
+                    { name: "Unpaid", value: Math.max(metrics.agentTotal - metrics.agentPaid, 0) },
+                  ]}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={4}
+                >
+                  <Cell fill={AGENT_PIE_COLORS[0]} />
+                  <Cell fill={AGENT_PIE_COLORS[1]} />
+                </Pie>
+                <RechartsTooltip
+                  formatter={(value: number) => formatCurrency(value)}
+                />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Retailer Payment Status</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[260px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: "Collected", value: metrics.retailerPaid },
+                    { name: "Pending", value: Math.max(metrics.retailerTotal - metrics.retailerPaid, 0) },
+                  ]}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={4}
+                >
+                  <Cell fill={RETAILER_PIE_COLORS[0]} />
+                  <Cell fill={RETAILER_PIE_COLORS[1]} />
+                </Pie>
+                <RechartsTooltip
+                  formatter={(value: number) => formatCurrency(value)}
+                />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>

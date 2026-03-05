@@ -129,15 +129,29 @@ export default function InventoryPage() {
   }, [items, dateRange.from, dateRange.to]);
 
   // metrics
-  const metrics = useMemo(
-    () => ({
-      total: visibleItems.length,
-      good: visibleItems.filter((i) => i.status === "good").length,
-      damaged: visibleItems.filter((i) => i.status === "damaged").length,
-      lost: visibleItems.filter((i) => i.status === "lost").length,
-    }),
-    [visibleItems],
-  );
+  const metrics = useMemo(() => {
+    const total = visibleItems.length;
+    const good = visibleItems.filter((i) => i.status === "good").length;
+    const damagedItems = visibleItems.filter((i) => i.status === "damaged");
+    const lostItems = visibleItems.filter((i) => i.status === "lost");
+    const damaged = damagedItems.length;
+    const lost = lostItems.length;
+
+    // Cost of Loss: sum unit cost of all damaged/lost units within visible range
+    const unitMap: Record<string, number> = {};
+    orders.forEach((o) => {
+      if (o.quantity > 0) {
+        unitMap[o.id] = Math.round(o.importCostPhp / o.quantity);
+      }
+    });
+    const costOfLoss = [...damagedItems, ...lostItems].reduce((sum, item) => {
+      const unit = unitMap[item.orderId];
+      if (!unit) return sum;
+      return sum + unit;
+    }, 0);
+
+    return { total, good, damaged, lost, costOfLoss };
+  }, [visibleItems]);
 
   // chart data
   const statusChartData = useMemo(() => [
@@ -279,12 +293,13 @@ export default function InventoryPage() {
     { label: "Good", value: metrics.good, icon: CheckCircle2 },
     { label: "Damaged", value: metrics.damaged, icon: AlertTriangle },
     { label: "Lost", value: metrics.lost, icon: XCircle },
+    { label: "Cost of Loss", value: formatCurrency(metrics.costOfLoss), icon: XCircle },
   ];
 
   return (
     <div className="space-y-6">
       {/* Metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {metricCards.map((m) => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -297,6 +312,7 @@ export default function InventoryPage() {
                   "text-2xl font-bold",
                   m.label === "Damaged" && "text-amber-500",
                   m.label === "Lost" && "text-red-500",
+                  m.label === "Cost of Loss" && "text-red-500",
                 )}
               >
                 {m.value}
@@ -306,12 +322,12 @@ export default function InventoryPage() {
                   "text-xs",
                   m.label === "Damaged"
                     ? "text-amber-500"
-                    : m.label === "Lost"
+                    : m.label === "Lost" || m.label === "Cost of Loss"
                     ? "text-red-500"
                     : "text-muted-foreground",
                 )}
               >
-                products
+                {m.label === "Cost of Loss" ? "PHP" : "products"}
               </p>
             </CardContent>
           </Card>

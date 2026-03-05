@@ -8,7 +8,7 @@ export interface Agent {
   address: string; socialUrl: string; feePercent: number;
 }
 export interface Warehouse {
-  id: string; name: string; contactPerson: string; phone: string; email: string; address: string;
+  id: string; name: string; contactPerson: string; phone: string; email: string; address: string; socialUrl?: string;
 }
 export interface Retailer {
   id: string; name: string; contactPerson: string; phone: string; email: string;
@@ -113,13 +113,13 @@ export const payments: Payment[] = [
 
 // ============ USERS ============
 export interface MockUser {
-  id: string; name: string; email: string; role: "admin" | "editor" | "viewer"; active: boolean;
+  id: string; name: string; email: string; password?: string; role: "admin" | "editor" | "viewer"; active: boolean;
 }
 
 export const mockUsers: MockUser[] = [
-  { id: "1", name: "Jed Santos", email: "admin@jedoms.com", role: "admin", active: true },
-  { id: "2", name: "Maria Cruz", email: "editor@jedoms.com", role: "editor", active: true },
-  { id: "3", name: "Carlos Reyes", email: "viewer@jedoms.com", role: "viewer", active: true },
+  { id: "1", name: "Jed Santos", email: "admin@jedoms.com", password: "admin123", role: "admin", active: true },
+  { id: "2", name: "Maria Cruz", email: "editor@jedoms.com", password: "editor123", role: "editor", active: true },
+  { id: "3", name: "Carlos Reyes", email: "viewer@jedoms.com", password: "viewer123", role: "viewer", active: true },
 ];
 
 // ============ HELPERS ============

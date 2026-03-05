@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   suppliers as initSuppliers, agents as initAgents, warehouses as initWarehouses, retailers as initRetailers,
   orders, sales, mockUsers as initUsers,
@@ -61,7 +62,6 @@ const SettingsPage = () => {
     setDialog(null);
   };
   const deleteSupplier = (id: string) => {
-    if (isSupplierReferenced(id)) return;
     setSupplierList(prev => prev.filter(s => s.id !== id));
   };
 
@@ -77,14 +77,13 @@ const SettingsPage = () => {
     setDialog(null);
   };
   const deleteAgent = (id: string) => {
-    if (isAgentReferenced(id)) return;
     setAgentList(prev => prev.filter(a => a.id !== id));
   };
 
   // ============ Warehouse CRUD ============
   const openWarehouseDialog = (mode: "add" | "edit", item?: Warehouse) => {
     setDialog({ type: "warehouse", mode });
-    setForm(mode === "edit" && item ? { ...item } : { id: `WH-${String(warehouseList.length + 1).padStart(3, "0")}`, name: "", contactPerson: "", phone: "", email: "", address: "" });
+    setForm(mode === "edit" && item ? { ...item } : { id: `WH-${String(warehouseList.length + 1).padStart(3, "0")}`, name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "" });
   };
   const saveWarehouse = () => {
     if (!dialog) return;
@@ -108,14 +107,17 @@ const SettingsPage = () => {
     setDialog(null);
   };
   const deleteRetailer = (id: string) => {
-    if (isRetailerReferenced(id)) return;
     setRetailerList(prev => prev.filter(r => r.id !== id));
   };
 
   // ============ User CRUD (admin only) ============
   const openUserDialog = (mode: "add" | "edit", item?: MockUser) => {
     setDialog({ type: "user", mode });
-    setForm(mode === "edit" && item ? { ...item } : { id: String(userList.length + 1), name: "", email: "", role: "viewer" as UserRole, active: true });
+    setForm(
+      mode === "edit" && item
+        ? { ...item }
+        : { id: String(userList.length + 1), name: "", email: "", password: "", role: "viewer" as UserRole, active: true },
+    );
   };
   const saveUser = () => {
     if (!dialog) return;
@@ -124,7 +126,6 @@ const SettingsPage = () => {
     setDialog(null);
   };
   const deleteUser = (id: string) => {
-    if (id === user?.id) return;
     setUserList(prev => prev.filter(u => u.id !== id));
   };
 
@@ -158,9 +159,7 @@ const SettingsPage = () => {
         <div><Label>Email</Label><Input type="email" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
       </div>
       <div><Label>Address</Label><Input value={form.address ?? ""} onChange={e => updateForm("address", e.target.value)} /></div>
-      {dialog?.type !== "warehouse" && (
-        <div><Label>Social / URL</Label><Input value={form.socialUrl ?? ""} onChange={e => updateForm("socialUrl", e.target.value)} /></div>
-      )}
+      <div><Label>Social / URL</Label><Input value={form.socialUrl ?? ""} onChange={e => updateForm("socialUrl", e.target.value)} /></div>
       {dialog?.type === "supplier" && (
         <div><Label>Shipping Fee (₱)</Label><Input type="number" value={form.shippingFee ?? 0} onChange={e => updateForm("shippingFee", Number(e.target.value))} /></div>
       )}
@@ -188,6 +187,15 @@ const SettingsPage = () => {
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Name</Label><Input value={form.name ?? ""} onChange={e => updateForm("name", e.target.value)} /></div>
         <div><Label>Email</Label><Input type="email" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
+      </div>
+      <div>
+        <Label>Password</Label>
+        <Input
+          type="password"
+          value={form.password ?? ""}
+          onChange={e => updateForm("password", e.target.value)}
+          placeholder="Set or update password"
+        />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -248,26 +256,68 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Shipping Fee</TableHead>
-                  {canEdit && <TableHead>Actions</TableHead>}
+                  <TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Address</TableHead><TableHead>Social</TableHead><TableHead>Shipping Fee</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredSuppliers.map(s => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-mono text-xs">{s.id}</TableCell>
+                    <TableRow key={s.id} className={canEdit ? "group" : undefined}>
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{s.contactPerson}</TableCell>
                       <TableCell>{s.phone}</TableCell>
                       <TableCell>{s.email}</TableCell>
+                      <TableCell className="max-w-[260px] truncate">{s.address}</TableCell>
+                      <TableCell>
+                        {s.socialUrl ? (
+                          <a
+                            href={s.socialUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center text-primary hover:text-primary/80"
+                            aria-label="Open supplier social link"
+                            title="Open social link"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="sr-only">Social</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>{formatCurrency(s.shippingFee)}</TableCell>
                       {canEdit && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openSupplierDialog("edit", s)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          {isAdmin && (
-                            <Button variant="ghost" size="icon" disabled={isSupplierReferenced(s.id)} onClick={() => deleteSupplier(s.id)} title={isSupplierReferenced(s.id) ? "Referenced in orders" : "Delete"}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                        <TableCell className="text-right align-middle">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                  onClick={() => openSupplierDialog("edit", s)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Edit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteSupplier(s.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Delete</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -288,26 +338,68 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Fee %</TableHead>
-                  {canEdit && <TableHead>Actions</TableHead>}
+                  <TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Address</TableHead><TableHead>Social</TableHead><TableHead>Fee %</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredAgents.map(a => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-mono text-xs">{a.id}</TableCell>
+                    <TableRow key={a.id} className={canEdit ? "group" : undefined}>
                       <TableCell className="font-medium">{a.name}</TableCell>
                       <TableCell>{a.contactPerson}</TableCell>
                       <TableCell>{a.phone}</TableCell>
                       <TableCell>{a.email}</TableCell>
+                      <TableCell className="max-w-[260px] truncate">{a.address}</TableCell>
+                      <TableCell>
+                        {a.socialUrl ? (
+                          <a
+                            href={a.socialUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center text-primary hover:text-primary/80"
+                            aria-label="Open agent social link"
+                            title="Open social link"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="sr-only">Social</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>{a.feePercent}%</TableCell>
                       {canEdit && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openAgentDialog("edit", a)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          {isAdmin && (
-                            <Button variant="ghost" size="icon" disabled={isAgentReferenced(a.id)} onClick={() => deleteAgent(a.id)} title={isAgentReferenced(a.id) ? "Referenced in orders" : "Delete"}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                        <TableCell className="text-right align-middle">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                  onClick={() => openAgentDialog("edit", a)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Edit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteAgent(a.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Delete</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -328,22 +420,67 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Address</TableHead>
-                  {canEdit && <TableHead>Actions</TableHead>}
+                  <TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Address</TableHead><TableHead>Social</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredWarehouses.map(w => (
-                    <TableRow key={w.id}>
-                      <TableCell className="font-mono text-xs">{w.id}</TableCell>
+                    <TableRow key={w.id} className={canEdit ? "group" : undefined}>
                       <TableCell className="font-medium">{w.name}</TableCell>
                       <TableCell>{w.contactPerson}</TableCell>
                       <TableCell>{w.phone}</TableCell>
                       <TableCell>{w.email}</TableCell>
-                      <TableCell>{w.address}</TableCell>
+                      <TableCell className="max-w-[260px] truncate">{w.address}</TableCell>
+                      <TableCell>
+                        {w.socialUrl ? (
+                          <a
+                            href={w.socialUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center text-primary hover:text-primary/80"
+                            aria-label="Open warehouse social link"
+                            title="Open social link"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="sr-only">Social</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       {canEdit && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openWarehouseDialog("edit", w)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          {isAdmin && <Button variant="ghost" size="icon" onClick={() => deleteWarehouse(w.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                        <TableCell className="text-right align-middle">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                  onClick={() => openWarehouseDialog("edit", w)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Edit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteWarehouse(w.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Delete</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -364,26 +501,68 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Payment</TableHead>
-                  {canEdit && <TableHead>Actions</TableHead>}
+                  <TableHead>Name</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead><TableHead>Email</TableHead><TableHead>Address</TableHead><TableHead>Social</TableHead><TableHead>Payment</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredRetailers.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                    <TableRow key={r.id} className={canEdit ? "group" : undefined}>
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>{r.contactPerson}</TableCell>
                       <TableCell>{r.phone}</TableCell>
                       <TableCell>{r.email}</TableCell>
+                      <TableCell className="max-w-[260px] truncate">{r.address}</TableCell>
+                      <TableCell>
+                        {r.socialUrl ? (
+                          <a
+                            href={r.socialUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center text-primary hover:text-primary/80"
+                            aria-label="Open retailer social link"
+                            title="Open social link"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="sr-only">Social</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell><Badge variant="outline">{r.paymentMethod}</Badge></TableCell>
                       {canEdit && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openRetailerDialog("edit", r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          {isAdmin && (
-                            <Button variant="ghost" size="icon" disabled={isRetailerReferenced(r.id)} onClick={() => deleteRetailer(r.id)} title={isRetailerReferenced(r.id) ? "Referenced in sales" : "Delete"}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
+                        <TableCell className="text-right align-middle">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                  onClick={() => openRetailerDialog("edit", r)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Edit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteRetailer(r.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Delete</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -404,22 +583,52 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
-                  {isAdmin && <TableHead>Actions</TableHead>}
+                  <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredUsers.map(u => (
-                    <TableRow key={u.id}>
+                    <TableRow key={u.id} className={isAdmin ? "group" : undefined}>
                       <TableCell className="font-medium">{u.name}</TableCell>
                       <TableCell>{u.email}</TableCell>
+                      <TableCell>
+                        {u.password ? "••••••••" : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
                       <TableCell>{roleBadge(u.role)}</TableCell>
                       <TableCell><Badge variant={u.active ? "default" : "secondary"}>{u.active ? "Active" : "Inactive"}</Badge></TableCell>
                       {isAdmin && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openUserDialog("edit", u)}><Pencil className="h-3.5 w-3.5" /></Button>
-                          <Button variant="ghost" size="icon" disabled={u.id === user?.id} onClick={() => deleteUser(u.id)} title={u.id === user?.id ? "Cannot delete self" : "Delete"}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                        <TableCell className="text-right align-middle">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                  onClick={() => openUserDialog("edit", u)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Edit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => deleteUser(u.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p className="text-xs">Delete</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>

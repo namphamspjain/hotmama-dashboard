@@ -82,7 +82,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 to={item.path}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
@@ -91,7 +91,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <item.icon className="h-4 w-4 shrink-0" />
                 {!collapsed && <span>{item.title}</span>}
                 {item.title === "Payments" && overdueCount > 0 && (
-                  <Badge variant="destructive" className={cn("ml-auto text-xs", collapsed && "absolute left-8 top-0 h-4 w-4 p-0 flex items-center justify-center text-[10px]")}>
+                  <Badge
+                    variant="destructive"
+                    className={cn(
+                      "ml-auto text-xs",
+                      collapsed &&
+                        "absolute -right-1 -top-1 h-4 w-4 p-0 flex items-center justify-center text-[10px]",
+                    )}
+                  >
                     {overdueCount}
                   </Badge>
                 )}
