@@ -84,19 +84,20 @@ export interface Sale {
 }
 
 export const sales: Sale[] = [
-  { id: "SL-001", retailerId: "RET-001", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 3, sellingPrice: 72000, wholesalePrice: 60000, deliveryFee: 500, revenue: 216000, netProfit: 35500, deliveryStatus: "delivered", saleDate: "2026-01-25" },
-  { id: "SL-002", retailerId: "RET-002", productName: "iPad Air M2 256GB", productType: "iPad", quantity: 2, sellingPrice: 38000, wholesalePrice: 30000, deliveryFee: 400, revenue: 76000, netProfit: 15600, deliveryStatus: "delivered", saleDate: "2026-01-28" },
-  { id: "SL-003", retailerId: "RET-003", productName: "MacBook Air M3 512GB", productType: "MacBook", quantity: 1, sellingPrice: 85000, wholesalePrice: 70000, deliveryFee: 600, revenue: 85000, netProfit: 14400, deliveryStatus: "pending", saleDate: "2026-02-12" },
-  { id: "SL-004", retailerId: "RET-001", productName: "Apple Watch Ultra 2", productType: "Apple Watch", quantity: 2, sellingPrice: 45000, wholesalePrice: 38000, deliveryFee: 300, revenue: 90000, netProfit: 13700, deliveryStatus: "delivered", saleDate: "2026-02-05" },
-  { id: "SL-005", retailerId: "RET-002", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 1, sellingPrice: 70000, wholesalePrice: 60000, deliveryFee: 500, revenue: 70000, netProfit: 9500, deliveryStatus: "refunded", saleDate: "2026-02-01" },
+  { id: "SL-20260125-001", retailerId: "RET-001", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 3, sellingPrice: 72000, wholesalePrice: 60000, deliveryFee: 500, revenue: 216000, netProfit: 35500, deliveryStatus: "delivered", saleDate: "2026-01-25" },
+  { id: "SL-20260128-002", retailerId: "RET-002", productName: "iPad Air M2 256GB", productType: "iPad", quantity: 2, sellingPrice: 38000, wholesalePrice: 30000, deliveryFee: 400, revenue: 76000, netProfit: 15600, deliveryStatus: "delivered", saleDate: "2026-01-28" },
+  { id: "SL-20260212-003", retailerId: "RET-003", productName: "MacBook Air M3 512GB", productType: "MacBook", quantity: 1, sellingPrice: 85000, wholesalePrice: 70000, deliveryFee: 600, revenue: 85000, netProfit: 14400, deliveryStatus: "pending", saleDate: "2026-02-12" },
+  { id: "SL-20260205-004", retailerId: "RET-001", productName: "Apple Watch Ultra 2", productType: "Apple Watch", quantity: 2, sellingPrice: 45000, wholesalePrice: 38000, deliveryFee: 300, revenue: 90000, netProfit: 13700, deliveryStatus: "delivered", saleDate: "2026-02-05" },
+  { id: "SL-20260201-005", retailerId: "RET-002", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 1, sellingPrice: 70000, wholesalePrice: 60000, deliveryFee: 500, revenue: 70000, netProfit: 9500, deliveryStatus: "refunded", saleDate: "2026-02-01" },
 ];
 
 // ============ PAYMENTS ============
 export type PaymentType = "agent" | "retailer";
+export type RetailerPayStatus = "unsold" | "pending" | "sold" | "refunded";
 
 export interface Payment {
   id: string; type: PaymentType; partnerName: string; linkedId: string; amount: number;
-  status: PayStatus; dueDate: string; paidDate?: string;
+  status: PayStatus | RetailerPayStatus; dueDate: string; paidDate?: string;
 }
 
 export const payments: Payment[] = [
@@ -104,10 +105,10 @@ export const payments: Payment[] = [
   { id: "PAY-002", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260115-002", amount: 1077, status: "paid", dueDate: "2026-01-29", paidDate: "2026-01-28" },
   { id: "PAY-003", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260201-003", amount: 1635, status: "unpaid", dueDate: "2026-02-15" },
   { id: "PAY-004", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260105-006", amount: 1190, status: "overdue", dueDate: "2026-01-19" },
-  { id: "PAY-005", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-001", amount: 216000, status: "paid", dueDate: "2026-02-01", paidDate: "2026-01-31" },
-  { id: "PAY-006", type: "retailer", partnerName: "iGadget Store", linkedId: "SL-002", amount: 76000, status: "paid", dueDate: "2026-02-04", paidDate: "2026-02-03" },
-  { id: "PAY-007", type: "retailer", partnerName: "Apple Corner MNL", linkedId: "SL-003", amount: 85000, status: "unpaid", dueDate: "2026-02-26" },
-  { id: "PAY-008", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-004", amount: 90000, status: "overdue", dueDate: "2026-02-12" },
+  { id: "PAY-005", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260201-005", amount: 216000, status: "sold", dueDate: "2026-02-01", paidDate: "2026-01-31" },
+  { id: "PAY-006", type: "retailer", partnerName: "iGadget Store", linkedId: "SL-20260128-002", amount: 76000, status: "sold", dueDate: "2026-02-04", paidDate: "2026-02-03" },
+  { id: "PAY-007", type: "retailer", partnerName: "Apple Corner MNL", linkedId: "SL-20260212-003", amount: 85000, status: "pending", dueDate: "2026-02-26" },
+  { id: "PAY-008", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260205-004", amount: 90000, status: "refunded", dueDate: "2026-02-12" },
 ];
 
 // ============ USERS ============
