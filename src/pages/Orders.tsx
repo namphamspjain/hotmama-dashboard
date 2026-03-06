@@ -85,9 +85,17 @@ const formatShortDate = (value?: string) => {
   return d.toLocaleDateString("en-GB"); // dd/mm/yy
 };
 
+const formatYuan = (amount: number): string => {
+  return `¥${amount.toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+};
+
 const emptyForm = {
   supplierId: "", agentId: "", productType: "", productName: "",
   quantity: "", importUnitPriceYuan: "", exchangeRate: "7.8",
+  shippingFee: "",
   shippingStatus: "shipping" as ShippingStatus,
   payStatus: "unpaid" as PayStatus,
   orderDate: new Date().toISOString().slice(0, 10),
@@ -138,10 +146,7 @@ export default function OrdersPage() {
     const shipping = visibleOrders.filter((o) => o.shippingStatus === "shipping").length;
     const received = visibleOrders.filter((o) => o.shippingStatus === "received").length;
     const totalImportCost = visibleOrders.reduce((s, o) => s + getImportCostPhpFromUnit(o), 0);
-    const totalShippingFees = visibleOrders.reduce((s, o) => {
-      const sup = suppliers.find((sp) => sp.id === o.supplierId);
-      return s + (sup?.shippingFee ?? 0);
-    }, 0);
+    const totalShippingFees = visibleOrders.reduce((s, o) => s + (o.shippingFee ?? 0), 0);
     const totalAgentFees = visibleOrders.reduce((s, o) => {
       const agt = agents.find((a) => a.id === o.agentId);
       const baseImport = getImportCostPhpFromUnit(o);
@@ -216,6 +221,7 @@ export default function OrdersPage() {
       importUnitPriceYuan: parseFloat(form.importUnitPriceYuan),
       exchangeRate: parseFloat(form.exchangeRate),
       importCostPhp: calcCost,
+      shippingFee: Math.round(parseFloat(form.shippingFee) || 0),
       shippingStatus: form.shippingStatus,
       payStatus: form.payStatus,
       orderDate: form.orderDate,
@@ -302,6 +308,22 @@ export default function OrdersPage() {
       refreshExchangeRate();
     }
   }, [dialogOpen, refreshExchangeRate]);
+
+  // Default Shipping Fee from selected supplier (only for new orders)
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (editingOrder) return;
+    if (!form.supplierId) return;
+    const sup = suppliers.find((s) => s.id === form.supplierId);
+    if (!sup) return;
+    setForm((prev) => {
+      const current = parseFloat(prev.shippingFee);
+      const hasNonZero =
+        prev.shippingFee !== "" && !Number.isNaN(current) && current !== 0;
+      if (hasNonZero) return prev;
+      return { ...prev, shippingFee: String(sup.shippingFee ?? 0) };
+    });
+  }, [dialogOpen, editingOrder, form.supplierId]);
 
   return (
     <div className="space-y-6">
@@ -502,8 +524,9 @@ export default function OrdersPage() {
                     "Product Type",
                     "Product Name",
                     "Qty",
-                    "Unit Price (PHP)",
+                    "Unit Price (¥)",
                     "Import Cost (PHP)",
+                    "Shipping Fee (PHP)",
                     "Shipping",
                     "Payment",
                     "Order Date",
@@ -511,7 +534,7 @@ export default function OrdersPage() {
                     "Notes",
                   ];
                   const rows = filtered.map((o) => {
-                    const unitPrice = getUnitPricePhp(o);
+                    const unitPriceYuan = o.importUnitPriceYuan;
                     const importCost = getImportCostPhpFromUnit(o);
                     return [
                       o.id,
@@ -520,8 +543,9 @@ export default function OrdersPage() {
                       o.productType,
                       o.productName,
                       String(o.quantity),
-                      String(unitPrice),
+                      String(unitPriceYuan),
                       String(importCost),
+                      String(o.shippingFee ?? 0),
                       o.shippingStatus,
                       o.payStatus,
                       o.orderDate,
@@ -600,41 +624,48 @@ export default function OrdersPage() {
 
           {/* Table */}
           <div className="rounded-md border">
-            <div className="overflow-x-auto">
-              <Table className="min-w-[1100px]">
+            <div>
+              <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("id")}>
+                  <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("id")}>
                     <span className="flex items-center">Order ID <SortIcon field="id" /></span>
                   </TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Product Type</TableHead>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("quantity")}>
+                  <TableHead className="whitespace-nowrap">Supplier</TableHead>
+                  <TableHead className="whitespace-nowrap">Product Type</TableHead>
+                  <TableHead className="whitespace-nowrap">Product Name</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none whitespace-nowrap"
+                    onClick={() => toggleSort("quantity")}
+                  >
                     <span className="flex items-center">Qty <SortIcon field="quantity" /></span>
                   </TableHead>
-                  <TableHead className="text-right">Unit Price</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Unit Price (¥)</TableHead>
                   <TableHead
-                    className="cursor-pointer select-none text-right"
+                    className="cursor-pointer select-none text-right whitespace-nowrap"
                     onClick={() => toggleSort("importCostPhp")}
                   >
                     <span className="flex items-center justify-end">
                       Import Cost <SortIcon field="importCostPhp" />
                     </span>
                   </TableHead>
-                  <TableHead>Shipping</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("orderDate")}>
+                  <TableHead className="text-right whitespace-nowrap">Shipping Fee</TableHead>
+                  <TableHead className="whitespace-nowrap">Shipping</TableHead>
+                  <TableHead className="whitespace-nowrap">Payment</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none whitespace-nowrap"
+                    onClick={() => toggleSort("orderDate")}
+                  >
                     <span className="flex items-center">Order Date <SortIcon field="orderDate" /></span>
                   </TableHead>
-                  <TableHead>Receival Date</TableHead>
+                  <TableHead className="whitespace-nowrap">Receival Date</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
                       <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
                       No orders found.
                     </TableCell>
@@ -643,7 +674,7 @@ export default function OrdersPage() {
                   filtered.map((o) => {
                     const sb = shippingBadge[o.shippingStatus];
                     const pb = payBadge[o.payStatus];
-                    const unitPrice = getUnitPricePhp(o);
+                    const unitPriceYuan = o.importUnitPriceYuan;
                     const importCost = getImportCostPhpFromUnit(o);
                     const receivalDisplay = formatShortDate(o.receivalDate);
                     return (
@@ -654,20 +685,18 @@ export default function OrdersPage() {
                         }}
                         className="group"
                       >
-                        <TableCell className="font-mono text-xs font-medium">{o.id}</TableCell>
+                        <TableCell className="font-mono text-xs font-medium whitespace-nowrap">{o.id}</TableCell>
                         <TableCell className="text-sm">{getSupplierName(o.supplierId)}</TableCell>
                         <TableCell>
                           <p className="text-sm font-medium">{o.productType}</p>
                         </TableCell>
                         <TableCell>
-                          <div>
-                            <p className="text-sm font-medium">{o.productName}</p>
-                            <p className="text-xs text-muted-foreground">{o.productType}</p>
-                          </div>
+                          <p className="text-sm font-medium">{o.productName}</p>
                         </TableCell>
                         <TableCell className="text-sm">{o.quantity}</TableCell>
-                        <TableCell className="text-sm text-right">{formatCurrency(unitPrice)}</TableCell>
+                        <TableCell className="text-sm text-right">{formatYuan(unitPriceYuan)}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{formatCurrency(importCost)}</TableCell>
+                        <TableCell className="text-sm text-right font-medium">{formatCurrency(o.shippingFee ?? 0)}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
                         </TableCell>
@@ -694,6 +723,7 @@ export default function OrdersPage() {
                                       quantity: String(o.quantity),
                                       importUnitPriceYuan: String(o.importUnitPriceYuan),
                                       exchangeRate: String(o.exchangeRate),
+                                  shippingFee: String(o.shippingFee ?? 0),
                                       shippingStatus: o.shippingStatus,
                                       payStatus: o.payStatus,
                                       orderDate: o.orderDate,
@@ -849,6 +879,15 @@ export default function OrdersPage() {
                 Estimated Import Cost
               </p>
               <p className="text-2xl font-bold">{formatCurrency(calcCost)}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Shipping Fee (₱)</Label>
+              <Input
+                type="number"
+                min="0"
+                value={form.shippingFee}
+                onChange={(e) => setForm((f) => ({ ...f, shippingFee: e.target.value }))}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

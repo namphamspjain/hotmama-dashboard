@@ -42,16 +42,17 @@ export type PayStatus = "paid" | "unpaid" | "overdue";
 export interface Order {
   id: string; supplierId: string; agentId: string; productType: string; productName: string;
   quantity: number; importUnitPriceYuan: number; exchangeRate: number; importCostPhp: number;
+  shippingFee: number;
   shippingStatus: ShippingStatus; payStatus: PayStatus; orderDate: string; receivalDate?: string; notes?: string;
 }
 
 export const orders: Order[] = [
-  { id: "OD-20260110-001", supplierId: "SUP-001", agentId: "AGT-001", productType: "iPhone", productName: "iPhone 15 Pro Max 256GB", quantity: 10, importUnitPriceYuan: 7800, exchangeRate: 7.8, importCostPhp: 100000, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-10", receivalDate: "2026-01-18" },
-  { id: "OD-20260115-002", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPad", productName: "iPad Air M2 256GB", quantity: 5, importUnitPriceYuan: 4200, exchangeRate: 7.8, importCostPhp: 26923, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-15", receivalDate: "2026-01-22" },
-  { id: "OD-20260201-003", supplierId: "SUP-001", agentId: "AGT-001", productType: "MacBook", productName: "MacBook Air M3 512GB", quantity: 3, importUnitPriceYuan: 8500, exchangeRate: 7.8, importCostPhp: 32692, shippingStatus: "received", payStatus: "unpaid", orderDate: "2026-02-01", receivalDate: "2026-02-09" },
-  { id: "OD-20260210-004", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPhone", productName: "iPhone 15 128GB", quantity: 15, importUnitPriceYuan: 5200, exchangeRate: 7.8, importCostPhp: 100000, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-10" },
-  { id: "OD-20260215-005", supplierId: "SUP-001", agentId: "AGT-001", productType: "AirPods", productName: "AirPods Pro 2nd Gen", quantity: 20, importUnitPriceYuan: 1500, exchangeRate: 7.8, importCostPhp: 38462, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-15" },
-  { id: "OD-20260105-006", supplierId: "SUP-001", agentId: "AGT-002", productType: "Apple Watch", productName: "Apple Watch Ultra 2", quantity: 4, importUnitPriceYuan: 5800, exchangeRate: 7.8, importCostPhp: 29744, shippingStatus: "received", payStatus: "overdue", orderDate: "2026-01-05", receivalDate: "2026-01-14" },
+  { id: "OD-20260110-001", supplierId: "SUP-001", agentId: "AGT-001", productType: "iPhone", productName: "iPhone 15 Pro Max 256GB", quantity: 10, importUnitPriceYuan: 7800, exchangeRate: 7.8, importCostPhp: 100000, shippingFee: 2500, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-10", receivalDate: "2026-01-18" },
+  { id: "OD-20260115-002", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPad", productName: "iPad Air M2 256GB", quantity: 5, importUnitPriceYuan: 4200, exchangeRate: 7.8, importCostPhp: 26923, shippingFee: 1800, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-15", receivalDate: "2026-01-22" },
+  { id: "OD-20260201-003", supplierId: "SUP-001", agentId: "AGT-001", productType: "MacBook", productName: "MacBook Air M3 512GB", quantity: 3, importUnitPriceYuan: 8500, exchangeRate: 7.8, importCostPhp: 32692, shippingFee: 2500, shippingStatus: "received", payStatus: "unpaid", orderDate: "2026-02-01", receivalDate: "2026-02-09" },
+  { id: "OD-20260210-004", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPhone", productName: "iPhone 15 128GB", quantity: 15, importUnitPriceYuan: 5200, exchangeRate: 7.8, importCostPhp: 100000, shippingFee: 1800, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-10" },
+  { id: "OD-20260215-005", supplierId: "SUP-001", agentId: "AGT-001", productType: "AirPods", productName: "AirPods Pro 2nd Gen", quantity: 20, importUnitPriceYuan: 1500, exchangeRate: 7.8, importCostPhp: 38462, shippingFee: 2500, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-15" },
+  { id: "OD-20260105-006", supplierId: "SUP-001", agentId: "AGT-002", productType: "Apple Watch", productName: "Apple Watch Ultra 2", quantity: 4, importUnitPriceYuan: 5800, exchangeRate: 7.8, importCostPhp: 29744, shippingFee: 2500, shippingStatus: "received", payStatus: "overdue", orderDate: "2026-01-05", receivalDate: "2026-01-14" },
 ];
 
 // ============ INVENTORY ============
@@ -63,15 +64,15 @@ export interface InventoryItem {
 }
 
 export const inventory: InventoryItem[] = [
-  { id: "PRD-001", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", status: "good", orderId: "OD-20260110-001", receivalDate: "2026-01-18" },
-  { id: "PRD-002", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", status: "good", orderId: "OD-20260110-001", receivalDate: "2026-01-18" },
-  { id: "PRD-003", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", status: "damaged", orderId: "OD-20260110-001", receivalDate: "2026-01-18", notes: "Screen scratch on arrival" },
-  { id: "PRD-004", productName: "iPad Air M2 256GB", productType: "iPad", status: "good", orderId: "OD-20260115-002", receivalDate: "2026-01-22" },
-  { id: "PRD-005", productName: "iPad Air M2 256GB", productType: "iPad", status: "good", orderId: "OD-20260115-002", receivalDate: "2026-01-22" },
-  { id: "PRD-006", productName: "MacBook Air M3 512GB", productType: "MacBook", status: "good", orderId: "OD-20260201-003", receivalDate: "2026-02-09" },
-  { id: "PRD-007", productName: "MacBook Air M3 512GB", productType: "MacBook", status: "lost", orderId: "OD-20260201-003", receivalDate: "2026-02-09", notes: "Missing from shipment" },
-  { id: "PRD-008", productName: "Apple Watch Ultra 2", productType: "Apple Watch", status: "good", orderId: "OD-20260105-006", receivalDate: "2026-01-14" },
-  { id: "PRD-009", productName: "Apple Watch Ultra 2", productType: "Apple Watch", status: "good", orderId: "OD-20260105-006", receivalDate: "2026-01-14" },
+  { id: "PRD-20260118-001", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", status: "good", orderId: "OD-20260110-001", receivalDate: "2026-01-18" },
+  { id: "PRD-20260118-002", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", status: "good", orderId: "OD-20260110-001", receivalDate: "2026-01-18" },
+  { id: "PRD-20260118-003", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", status: "damaged", orderId: "OD-20260110-001", receivalDate: "2026-01-18", notes: "Screen scratch on arrival" },
+  { id: "PRD-20260122-001", productName: "iPad Air M2 256GB", productType: "iPad", status: "good", orderId: "OD-20260115-002", receivalDate: "2026-01-22" },
+  { id: "PRD-20260122-002", productName: "iPad Air M2 256GB", productType: "iPad", status: "good", orderId: "OD-20260115-002", receivalDate: "2026-01-22" },
+  { id: "PRD-20260209-001", productName: "MacBook Air M3 512GB", productType: "MacBook", status: "good", orderId: "OD-20260201-003", receivalDate: "2026-02-09" },
+  { id: "PRD-20260209-002", productName: "MacBook Air M3 512GB", productType: "MacBook", status: "lost", orderId: "OD-20260201-003", receivalDate: "2026-02-09", notes: "Missing from shipment" },
+  { id: "PRD-20260114-001", productName: "Apple Watch Ultra 2", productType: "Apple Watch", status: "good", orderId: "OD-20260105-006", receivalDate: "2026-01-14" },
+  { id: "PRD-20260114-002", productName: "Apple Watch Ultra 2", productType: "Apple Watch", status: "good", orderId: "OD-20260105-006", receivalDate: "2026-01-14" },
 ];
 
 // ============ SALES ============
@@ -80,15 +81,15 @@ export type DeliveryStatus = "pending" | "delivered" | "refunded";
 export interface Sale {
   id: string; retailerId: string; productName: string; productType: string; quantity: number;
   sellingPrice: number; wholesalePrice: number; deliveryFee: number; revenue: number;
-  netProfit: number; deliveryStatus: DeliveryStatus; saleDate: string;
+  netProfit: number; deliveryStatus: DeliveryStatus; saleDate: string; warrantyDays: number;
 }
 
 export const sales: Sale[] = [
-  { id: "SL-20260125-001", retailerId: "RET-001", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 3, sellingPrice: 72000, wholesalePrice: 60000, deliveryFee: 500, revenue: 216000, netProfit: 35500, deliveryStatus: "delivered", saleDate: "2026-01-25" },
-  { id: "SL-20260128-002", retailerId: "RET-002", productName: "iPad Air M2 256GB", productType: "iPad", quantity: 2, sellingPrice: 38000, wholesalePrice: 30000, deliveryFee: 400, revenue: 76000, netProfit: 15600, deliveryStatus: "delivered", saleDate: "2026-01-28" },
-  { id: "SL-20260212-003", retailerId: "RET-003", productName: "MacBook Air M3 512GB", productType: "MacBook", quantity: 1, sellingPrice: 85000, wholesalePrice: 70000, deliveryFee: 600, revenue: 85000, netProfit: 14400, deliveryStatus: "pending", saleDate: "2026-02-12" },
-  { id: "SL-20260205-004", retailerId: "RET-001", productName: "Apple Watch Ultra 2", productType: "Apple Watch", quantity: 2, sellingPrice: 45000, wholesalePrice: 38000, deliveryFee: 300, revenue: 90000, netProfit: 13700, deliveryStatus: "delivered", saleDate: "2026-02-05" },
-  { id: "SL-20260201-005", retailerId: "RET-002", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 1, sellingPrice: 70000, wholesalePrice: 60000, deliveryFee: 500, revenue: 70000, netProfit: 9500, deliveryStatus: "refunded", saleDate: "2026-02-01" },
+  { id: "SL-20260125-001", retailerId: "RET-001", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 3, sellingPrice: 72000, wholesalePrice: 60000, deliveryFee: 500, revenue: 216000, netProfit: 35500, deliveryStatus: "delivered", saleDate: "2026-01-25", warrantyDays: 30 },
+  { id: "SL-20260128-002", retailerId: "RET-002", productName: "iPad Air M2 256GB", productType: "iPad", quantity: 2, sellingPrice: 38000, wholesalePrice: 30000, deliveryFee: 400, revenue: 76000, netProfit: 15600, deliveryStatus: "delivered", saleDate: "2026-01-28", warrantyDays: 45 },
+  { id: "SL-20260212-003", retailerId: "RET-003", productName: "MacBook Air M3 512GB", productType: "MacBook", quantity: 1, sellingPrice: 85000, wholesalePrice: 70000, deliveryFee: 600, revenue: 85000, netProfit: 14400, deliveryStatus: "pending", saleDate: "2026-02-12", warrantyDays: 90 },
+  { id: "SL-20260205-004", retailerId: "RET-001", productName: "Apple Watch Ultra 2", productType: "Apple Watch", quantity: 2, sellingPrice: 45000, wholesalePrice: 38000, deliveryFee: 300, revenue: 90000, netProfit: 13700, deliveryStatus: "delivered", saleDate: "2026-02-05", warrantyDays: 60 },
+  { id: "SL-20260201-005", retailerId: "RET-002", productName: "iPhone 15 Pro Max 256GB", productType: "iPhone", quantity: 1, sellingPrice: 70000, wholesalePrice: 60000, deliveryFee: 500, revenue: 70000, netProfit: 9500, deliveryStatus: "refunded", saleDate: "2026-02-01", warrantyDays: 30 },
 ];
 
 // ============ PAYMENTS ============
@@ -111,15 +112,78 @@ export const payments: Payment[] = [
   { id: "PAY-008", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260205-004", amount: 90000, status: "refunded", dueDate: "2026-02-12" },
 ];
 
+// ============ COSTS ============
+export type CostType =
+  | "Cost of Loss"
+  | "Shipping Fees"
+  | "Agent Fees"
+  | "Salary"
+  | "Housing Rental"
+  | "Miscellaneous";
+
+export interface CostItem {
+  id: string; // C-YYYYMMDD-XXXX
+  type: CostType;
+  note: string;
+  amount: number;
+  costDate: string;
+  receipt?: string;
+}
+
+export const costs: CostItem[] = [
+  {
+    id: "C-20260110-0001",
+    type: "Cost of Loss",
+    note: "Damaged units from January shipments",
+    amount: 15000,
+    costDate: "2026-01-10",
+  },
+  {
+    id: "C-20260131-0001",
+    type: "Shipping Fees",
+    note: "Consolidated import shipping fees (Jan)",
+    amount: 13600,
+    costDate: "2026-01-31",
+  },
+  {
+    id: "C-20260131-0002",
+    type: "Agent Fees",
+    note: "Commissions for logistics agents (Jan)",
+    amount: 14825,
+    costDate: "2026-01-31",
+  },
+  {
+    id: "C-20260201-0001",
+    type: "Salary",
+    note: "Warehouse staff salaries (Feb)",
+    amount: 50000,
+    costDate: "2026-02-01",
+  },
+  {
+    id: "C-20260201-0002",
+    type: "Housing Rental",
+    note: "Warehouse rental fee (Feb)",
+    amount: 25000,
+    costDate: "2026-02-01",
+  },
+  {
+    id: "C-20260205-0001",
+    type: "Miscellaneous",
+    note: "Office supplies and utilities",
+    amount: 8000,
+    costDate: "2026-02-05",
+  },
+];
+
 // ============ USERS ============
 export interface MockUser {
   id: string; name: string; email: string; password?: string; role: "admin" | "editor" | "viewer"; active: boolean;
 }
 
 export const mockUsers: MockUser[] = [
-  { id: "1", name: "Jed Santos", email: "admin@jedoms.com", password: "admin123", role: "admin", active: true },
-  { id: "2", name: "Maria Cruz", email: "editor@jedoms.com", password: "editor123", role: "editor", active: true },
-  { id: "3", name: "Carlos Reyes", email: "viewer@jedoms.com", password: "viewer123", role: "viewer", active: true },
+  { id: "1", name: "Jed Santos", email: "jedzcartas06", password: "jdzelevatech2026!", role: "admin", active: true },
+  { id: "2", name: "Meg Bae", email: "megbae29", password: "jdzelevatech2026!", role: "editor", active: true },
+  { id: "3", name: "Mae Mae", email: "maemae30", password: "jdzelevatech2026!", role: "viewer", active: true },
 ];
 
 // ============ HELPERS ============

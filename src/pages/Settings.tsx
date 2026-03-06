@@ -17,7 +17,7 @@ import {
   formatCurrency,
 } from "@/data/mock-data";
 import { useAuth, type UserRole } from "@/contexts/AuthContext";
-import { Truck, Users, Building2, Store, UserCog, Plus, Pencil, Trash2, Search, ExternalLink } from "lucide-react";
+import { Truck, Users, Building2, Store, UserCog, Plus, Pencil, Trash2, Search, ExternalLink, Ship, Eye, EyeOff } from "lucide-react";
 
 // ============ Partner helpers ============
 
@@ -40,6 +40,7 @@ const SettingsPage = () => {
 
   // User state
   const [userList, setUserList] = useState<MockUser[]>(initUsers);
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
 
   // Search
   const [search, setSearch] = useState("");
@@ -137,16 +138,6 @@ const SettingsPage = () => {
   const filteredRetailers = retailerList.filter(r => !q || r.name.toLowerCase().includes(q) || r.contactPerson.toLowerCase().includes(q));
   const filteredUsers = userList.filter(u => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
 
-  // ============ Render Helpers ============
-  const roleBadge = (role: string) => {
-    const map: Record<string, string> = {
-      admin: "bg-primary/15 text-primary border-primary/30",
-      editor: "bg-accent/50 text-accent-foreground border-accent/30",
-      viewer: "bg-muted text-muted-foreground border-border",
-    };
-    return <Badge className={map[role] ?? ""}>{role}</Badge>;
-  };
-
   // ============ Dialog Form Renderers ============
   const renderPartnerFields = () => (
     <div className="grid gap-3">
@@ -186,7 +177,7 @@ const SettingsPage = () => {
     <div className="grid gap-3">
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Name</Label><Input value={form.name ?? ""} onChange={e => updateForm("name", e.target.value)} /></div>
-        <div><Label>Email</Label><Input type="email" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
+        <div><Label>Username</Label><Input type="text" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
       </div>
       <div>
         <Label>Password</Label>
@@ -217,7 +208,16 @@ const SettingsPage = () => {
     </div>
   );
 
-  const dialogTitle = dialog ? `${dialog.mode === "add" ? "Add" : "Edit"} ${dialog.type.charAt(0).toUpperCase() + dialog.type.slice(1)}` : "";
+  const dialogTypeLabel: Record<"supplier" | "agent" | "warehouse" | "retailer" | "user", string> = {
+    supplier: "Supplier",
+    agent: "Agent",
+    warehouse: "Shipper",
+    retailer: "Retailer",
+    user: "User",
+  };
+  const dialogTitle = dialog
+    ? `${dialog.mode === "add" ? "Add" : "Edit"} ${dialogTypeLabel[dialog.type]}`
+    : "";
   const dialogSave = () => {
     if (!dialog) return;
     switch (dialog.type) {
@@ -241,7 +241,7 @@ const SettingsPage = () => {
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="suppliers" className="gap-1"><Truck className="h-3.5 w-3.5" />Suppliers</TabsTrigger>
           <TabsTrigger value="agents" className="gap-1"><Users className="h-3.5 w-3.5" />Agents</TabsTrigger>
-          <TabsTrigger value="warehouses" className="gap-1"><Building2 className="h-3.5 w-3.5" />Warehouses</TabsTrigger>
+          <TabsTrigger value="warehouses" className="gap-1"><Ship className="h-3.5 w-3.5" />Shippers</TabsTrigger>
           <TabsTrigger value="retailers" className="gap-1"><Store className="h-3.5 w-3.5" />Retailers</TabsTrigger>
           <TabsTrigger value="users" className="gap-1"><UserCog className="h-3.5 w-3.5" />Users</TabsTrigger>
         </TabsList>
@@ -410,12 +410,12 @@ const SettingsPage = () => {
           </Card>
         </TabsContent>
 
-        {/* ===== Warehouses ===== */}
+        {/* ===== Shippers (Warehouses) ===== */}
         <TabsContent value="warehouses">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Warehouses</CardTitle>
-              {canEdit && <Button size="sm" onClick={() => openWarehouseDialog("add")}><Plus className="h-4 w-4 mr-1" />Add Warehouse</Button>}
+              <CardTitle className="text-lg">Shippers</CardTitle>
+              {canEdit && <Button size="sm" onClick={() => openWarehouseDialog("add")}><Plus className="h-4 w-4 mr-1" />Add Shipper</Button>}
             </CardHeader>
             <CardContent>
               <Table>
@@ -583,56 +583,81 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
+                  <TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Password</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {filteredUsers.map(u => (
-                    <TableRow key={u.id} className={isAdmin ? "group" : undefined}>
-                      <TableCell className="font-medium">{u.name}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>
-                        {u.password ? "••••••••" : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell>{roleBadge(u.role)}</TableCell>
-                      <TableCell><Badge variant={u.active ? "default" : "secondary"}>{u.active ? "Active" : "Inactive"}</Badge></TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right align-middle">
-                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
-                                  onClick={() => openUserDialog("edit", u)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                <p className="text-xs">Edit</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => deleteUser(u.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                <p className="text-xs">Delete</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
+                  {filteredUsers.map(u => {
+                    const isVisible = visiblePasswords[u.id];
+                    return (
+                      <TableRow key={u.id} className={isAdmin ? "group" : undefined}>
+                        <TableCell className="font-medium">{u.name}</TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          {!u.password ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <span>{isVisible ? u.password : "••••••••"}</span>
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                                onClick={() =>
+                                  setVisiblePasswords(prev => ({
+                                    ...prev,
+                                    [u.id]: !prev[u.id],
+                                  }))
+                                }
+                                aria-label={isVisible ? "Hide password" : "Show password"}
+                              >
+                                {isVisible ? (
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          )}
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
+                        <TableCell><Badge variant={u.active ? "default" : "secondary"}>{u.active ? "Active" : "Inactive"}</Badge></TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right align-middle">
+                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                    onClick={() => openUserDialog("edit", u)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Edit</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => deleteUser(u.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Delete</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

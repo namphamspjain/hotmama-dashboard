@@ -1,0 +1,195 @@
+diff --git a/src/data/mock-data.ts b/src/data/mock-data.ts
+index 8137a4f..04ddc7e 100644
+--- a/src/data/mock-data.ts
++++ b/src/data/mock-data.ts
+@@ -42,16 +42,17 @@ export type PayStatus = "paid" | "unpaid" | "overdue";
+ export interface Order {
+   id: string; supplierId: string; agentId: string; productType: string; productName: string;
+   quantity: number; importUnitPriceYuan: number; exchangeRate: number; importCostPhp: number;
++  shippingFee: number;
+   shippingStatus: ShippingStatus; payStatus: PayStatus; orderDate: string; receivalDate?: string; notes?: string;
+ }
+ 
+ export const orders: Order[] = [
+-  { id: "OD-20260110-001", supplierId: "SUP-001", agentId: "AGT-001", productType: "iPhone", productName: "iPhone 15 Pro Max 256GB", quantity: 10, importUnitPriceYuan: 7800, exchangeRate: 7.8, importCostPhp: 100000, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-10", receivalDate: "2026-01-18" },
+-  { id: "OD-20260115-002", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPad", productName: "iPad Air M2 256GB", quantity: 5, importUnitPriceYuan: 4200, exchangeRate: 7.8, importCostPhp: 26923, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-15", receivalDate: "2026-01-22" },
+-  { id: "OD-20260201-003", supplierId: "SUP-001", agentId: "AGT-001", productType: "MacBook", productName: "MacBook Air M3 512GB", quantity: 3, importUnitPriceYuan: 8500, exchangeRate: 7.8, importCostPhp: 32692, shippingStatus: "received", payStatus: "unpaid", orderDate: "2026-02-01", receivalDate: "2026-02-09" },
+-  { id: "OD-20260210-004", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPhone", productName: "iPhone 15 128GB", quantity: 15, importUnitPriceYuan: 5200, exchangeRate: 7.8, importCostPhp: 100000, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-10" },
+-  { id: "OD-20260215-005", supplierId: "SUP-001", agentId: "AGT-001", productType: "AirPods", productName: "AirPods Pro 2nd Gen", quantity: 20, importUnitPriceYuan: 1500, exchangeRate: 7.8, importCostPhp: 38462, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-15" },
+-  { id: "OD-20260105-006", supplierId: "SUP-001", agentId: "AGT-002", productType: "Apple Watch", productName: "Apple Watch Ultra 2", quantity: 4, importUnitPriceYuan: 5800, exchangeRate: 7.8, importCostPhp: 29744, shippingStatus: "received", payStatus: "overdue", orderDate: "2026-01-05", receivalDate: "2026-01-14" },
++  { id: "OD-20260110-001", supplierId: "SUP-001", agentId: "AGT-001", productType: "iPhone", productName: "iPhone 15 Pro Max 256GB", quantity: 10, importUnitPriceYuan: 7800, exchangeRate: 7.8, importCostPhp: 100000, shippingFee: 2500, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-10", receivalDate: "2026-01-18" },
++  { id: "OD-20260115-002", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPad", productName: "iPad Air M2 256GB", quantity: 5, importUnitPriceYuan: 4200, exchangeRate: 7.8, importCostPhp: 26923, shippingFee: 1800, shippingStatus: "received", payStatus: "paid", orderDate: "2026-01-15", receivalDate: "2026-01-22" },
++  { id: "OD-20260201-003", supplierId: "SUP-001", agentId: "AGT-001", productType: "MacBook", productName: "MacBook Air M3 512GB", quantity: 3, importUnitPriceYuan: 8500, exchangeRate: 7.8, importCostPhp: 32692, shippingFee: 2500, shippingStatus: "received", payStatus: "unpaid", orderDate: "2026-02-01", receivalDate: "2026-02-09" },
++  { id: "OD-20260210-004", supplierId: "SUP-002", agentId: "AGT-002", productType: "iPhone", productName: "iPhone 15 128GB", quantity: 15, importUnitPriceYuan: 5200, exchangeRate: 7.8, importCostPhp: 100000, shippingFee: 1800, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-10" },
++  { id: "OD-20260215-005", supplierId: "SUP-001", agentId: "AGT-001", productType: "AirPods", productName: "AirPods Pro 2nd Gen", quantity: 20, importUnitPriceYuan: 1500, exchangeRate: 7.8, importCostPhp: 38462, shippingFee: 2500, shippingStatus: "shipping", payStatus: "unpaid", orderDate: "2026-02-15" },
++  { id: "OD-20260105-006", supplierId: "SUP-001", agentId: "AGT-002", productType: "Apple Watch", productName: "Apple Watch Ultra 2", quantity: 4, importUnitPriceYuan: 5800, exchangeRate: 7.8, importCostPhp: 29744, shippingFee: 2500, shippingStatus: "received", payStatus: "overdue", orderDate: "2026-01-05", receivalDate: "2026-01-14" },
+ ];
+ 
+ // ============ INVENTORY ============
+diff --git a/src/pages/Dashboard.tsx b/src/pages/Dashboard.tsx
+index de5c6f2..98b4a08 100644
+--- a/src/pages/Dashboard.tsx
++++ b/src/pages/Dashboard.tsx
+@@ -354,10 +354,7 @@ const DashboardPage = () => {
+     const ordersShipping = visibleOrders.filter((o) => o.shippingStatus === "shipping").length;
+     const ordersReceived = visibleOrders.filter((o) => o.shippingStatus === "received").length;
+     const totalImportCost = visibleOrders.reduce((s, o) => s + o.importCostPhp, 0);
+-    const totalShippingFees = visibleOrders.reduce((s, o) => {
+-      const sup = suppliers.find((sp) => sp.id === o.supplierId);
+-      return s + (sup?.shippingFee ?? 0);
+-    }, 0);
++    const totalShippingFees = visibleOrders.reduce((s, o) => s + (o.shippingFee ?? 0), 0);
+     const totalAgentFees = visibleOrders.reduce((s, o) => {
+       const agt = agents.find((a) => a.id === o.agentId);
+       return s + (agt ? o.importCostPhp * (agt.feePercent / 100) : 0);
+@@ -574,10 +571,7 @@ const DashboardPage = () => {
+       return sum + unit;
+     }, 0);
+ 
+-    const shippingFee = orders.reduce((sum, o) => {
+-      const sup = suppliers.find((s) => s.id === o.supplierId);
+-      return sum + (sup?.shippingFee ?? 0);
+-    }, 0);
++    const shippingFee = orders.reduce((sum, o) => sum + (o.shippingFee ?? 0), 0);
+ 
+     const agentFee = orders.reduce((sum, o) => {
+       const agt = agents.find((a) => a.id === o.agentId);
+diff --git a/src/pages/Orders.tsx b/src/pages/Orders.tsx
+index 465c9e5..0a1c7a5 100644
+--- a/src/pages/Orders.tsx
++++ b/src/pages/Orders.tsx
+@@ -88,6 +88,7 @@ const formatShortDate = (value?: string) => {
+ const emptyForm = {
+   supplierId: "", agentId: "", productType: "", productName: "",
+   quantity: "", importUnitPriceYuan: "", exchangeRate: "7.8",
++  shippingFee: "",
+   shippingStatus: "shipping" as ShippingStatus,
+   payStatus: "unpaid" as PayStatus,
+   orderDate: new Date().toISOString().slice(0, 10),
+@@ -138,10 +139,7 @@ export default function OrdersPage() {
+     const shipping = visibleOrders.filter((o) => o.shippingStatus === "shipping").length;
+     const received = visibleOrders.filter((o) => o.shippingStatus === "received").length;
+     const totalImportCost = visibleOrders.reduce((s, o) => s + getImportCostPhpFromUnit(o), 0);
+-    const totalShippingFees = visibleOrders.reduce((s, o) => {
+-      const sup = suppliers.find((sp) => sp.id === o.supplierId);
+-      return s + (sup?.shippingFee ?? 0);
+-    }, 0);
++    const totalShippingFees = visibleOrders.reduce((s, o) => s + (o.shippingFee ?? 0), 0);
+     const totalAgentFees = visibleOrders.reduce((s, o) => {
+       const agt = agents.find((a) => a.id === o.agentId);
+       const baseImport = getImportCostPhpFromUnit(o);
+@@ -216,6 +214,7 @@ export default function OrdersPage() {
+       importUnitPriceYuan: parseFloat(form.importUnitPriceYuan),
+       exchangeRate: parseFloat(form.exchangeRate),
+       importCostPhp: calcCost,
++      shippingFee: Math.round(parseFloat(form.shippingFee) || 0),
+       shippingStatus: form.shippingStatus,
+       payStatus: form.payStatus,
+       orderDate: form.orderDate,
+@@ -303,6 +302,22 @@ export default function OrdersPage() {
+     }
+   }, [dialogOpen, refreshExchangeRate]);
+ 
++  // Default Shipping Fee from selected supplier (only for new orders)
++  useEffect(() => {
++    if (!dialogOpen) return;
++    if (editingOrder) return;
++    if (!form.supplierId) return;
++    const sup = suppliers.find((s) => s.id === form.supplierId);
++    if (!sup) return;
++    setForm((prev) => {
++      const current = parseFloat(prev.shippingFee);
++      const hasNonZero =
++        prev.shippingFee !== "" && !Number.isNaN(current) && current !== 0;
++      if (hasNonZero) return prev;
++      return { ...prev, shippingFee: String(sup.shippingFee ?? 0) };
++    });
++  }, [dialogOpen, editingOrder, form.supplierId]);
++
+   return (
+     <div className="space-y-6">
+       {/* Metric cards */}
+@@ -504,6 +519,7 @@ export default function OrdersPage() {
+                     "Qty",
+                     "Unit Price (PHP)",
+                     "Import Cost (PHP)",
++                    "Shipping Fee (PHP)",
+                     "Shipping",
+                     "Payment",
+                     "Order Date",
+@@ -522,6 +538,7 @@ export default function OrdersPage() {
+                       String(o.quantity),
+                       String(unitPrice),
+                       String(importCost),
++                      String(o.shippingFee ?? 0),
+                       o.shippingStatus,
+                       o.payStatus,
+                       o.orderDate,
+@@ -601,7 +618,7 @@ export default function OrdersPage() {
+           {/* Table */}
+           <div className="rounded-md border">
+             <div className="overflow-x-auto">
+-              <Table className="min-w-[1100px]">
++              <Table className="min-w-[1200px]">
+               <TableHeader>
+                 <TableRow>
+                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("id")}>
+@@ -622,6 +639,7 @@ export default function OrdersPage() {
+                       Import Cost <SortIcon field="importCostPhp" />
+                     </span>
+                   </TableHead>
++                  <TableHead className="text-right">Shipping Fee</TableHead>
+                   <TableHead>Shipping</TableHead>
+                   <TableHead>Payment</TableHead>
+                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("orderDate")}>
+@@ -634,7 +652,7 @@ export default function OrdersPage() {
+               <TableBody>
+                 {filtered.length === 0 ? (
+                   <TableRow>
+-                    <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
++                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
+                       <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                       No orders found.
+                     </TableCell>
+@@ -668,6 +686,7 @@ export default function OrdersPage() {
+                         <TableCell className="text-sm">{o.quantity}</TableCell>
+                         <TableCell className="text-sm text-right">{formatCurrency(unitPrice)}</TableCell>
+                         <TableCell className="text-sm text-right font-medium">{formatCurrency(importCost)}</TableCell>
++                        <TableCell className="text-sm text-right font-medium">{formatCurrency(o.shippingFee ?? 0)}</TableCell>
+                         <TableCell>
+                           <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
+                         </TableCell>
+@@ -850,6 +870,15 @@ export default function OrdersPage() {
+               </p>
+               <p className="text-2xl font-bold">{formatCurrency(calcCost)}</p>
+             </div>
++            <div className="space-y-1.5">
++              <Label>Shipping Fee (₱)</Label>
++              <Input
++                type="number"
++                min="0"
++                value={form.shippingFee}
++                onChange={(e) => setForm((f) => ({ ...f, shippingFee: e.target.value }))}
++              />
++            </div>
+             <div className="grid grid-cols-2 gap-3">
+               <div className="space-y-1.5">
+                 <Label>Shipping Status</Label>
+diff --git a/src/pages/Sales.tsx b/src/pages/Sales.tsx
+index e4fb059..233c3d1 100644
+--- a/src/pages/Sales.tsx
++++ b/src/pages/Sales.tsx
+@@ -149,11 +149,8 @@ export default function SalesPage() {
+       return sum + unit;
+     }, 0);
+ 
+-    // 2) Shipping fee: sum supplier shippingFee for all orders
+-    const shippingFee = orders.reduce((sum, o) => {
+-      const sup = suppliers.find((s) => s.id === o.supplierId);
+-      return sum + (sup?.shippingFee ?? 0);
+-    }, 0);
++    // 2) Shipping fee: sum per-order shippingFee
++    const shippingFee = orders.reduce((sum, o) => sum + (o.shippingFee ?? 0), 0);
+ 
+     // 3) Agent fee: import cost * agent percent
+     const agentFee = orders.reduce((sum, o) => {

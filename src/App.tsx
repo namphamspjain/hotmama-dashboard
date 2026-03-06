@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
 import Inventory from "./pages/Inventory";
 import Sales from "./pages/Sales";
+import Cost from "./pages/Cost";
 import Payments from "./pages/Payments";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/orders" element={<ProtectedPage><Orders /></ProtectedPage>} />
               <Route path="/inventory" element={<ProtectedPage><Inventory /></ProtectedPage>} />
               <Route path="/sales" element={<ProtectedPage><Sales /></ProtectedPage>} />
+              <Route path="/costs" element={<ProtectedPage><Cost /></ProtectedPage>} />
               <Route path="/payments" element={<ProtectedPage><Payments /></ProtectedPage>} />
               <Route path="/settings" element={<ProtectedPage><Settings /></ProtectedPage>} />
               <Route path="*" element={<NotFound />} />

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Package,
@@ -80,17 +80,18 @@ const emptyForm = {
   notes: "",
 };
 
-const getNextProductId = (items: InventoryItem[]): string => {
+const getNextProductId = (items: InventoryItem[], receivalDate: string): string => {
+  const dateKey = receivalDate.replace(/-/g, "");
   let max = 0;
   items.forEach((i) => {
-    const match = i.id.match(/^PRD-(\d+)$/);
-    if (match) {
-      const n = parseInt(match[1], 10);
+    const match = i.id.match(/^PRD-(\d{8})-(\d{3})$/);
+    if (match && match[1] === dateKey) {
+      const n = parseInt(match[2], 10);
       if (n > max) max = n;
     }
   });
   const next = max + 1;
-  return `PRD-${String(next).padStart(3, "0")}`;
+  return `PRD-${dateKey}-${String(next).padStart(3, "0")}`;
 };
 
 export default function InventoryPage() {
@@ -130,12 +131,12 @@ export default function InventoryPage() {
 
   // metrics
   const metrics = useMemo(() => {
-    const total = visibleItems.length;
     const good = visibleItems.filter((i) => i.status === "good").length;
     const damagedItems = visibleItems.filter((i) => i.status === "damaged");
     const lostItems = visibleItems.filter((i) => i.status === "lost");
     const damaged = damagedItems.length;
     const lost = lostItems.length;
+    const total = good + damaged;
 
     // Cost of Loss: sum unit cost of all damaged/lost units within visible range
     const unitMap: Record<string, number> = {};
@@ -261,7 +262,7 @@ export default function InventoryPage() {
 
   const handleSubmit = () => {
     if (!form.orderId || !form.productName || !form.productType || !form.receivalDate) return;
-    const id = editingItem ? editingItem.id : form.productId || getNextProductId(items);
+    const id = editingItem ? editingItem.id : getNextProductId(items, form.receivalDate);
     const nextItem: InventoryItem = {
       id,
       orderId: form.orderId,
@@ -280,13 +281,23 @@ export default function InventoryPage() {
     setEditingItem(null);
     setForm({
       ...emptyForm,
-      productId: getNextProductId(items),
+      productId: getNextProductId(items, emptyForm.receivalDate),
     });
   };
 
   const handleDeleteItem = (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
   };
+
+  // Keep Product ID in sync with receival date for new items
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (editingItem) return;
+    if (!form.receivalDate) return;
+    const nextId = getNextProductId(items, form.receivalDate);
+    if (form.productId === nextId) return;
+    setForm((prev) => ({ ...prev, productId: nextId }));
+  }, [dialogOpen, editingItem, form.receivalDate, items]);
 
   const metricCards = [
     { label: "Total In-Store", value: metrics.total, icon: Package },
@@ -418,7 +429,7 @@ export default function InventoryPage() {
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Status Distribution</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Inventory Status Distribution</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -432,7 +443,7 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">By Product Type</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Inventory By Product Type</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -548,11 +559,10 @@ export default function InventoryPage() {
                 <Button
                   size="sm"
                   onClick={() => {
-                    const nextId = getNextProductId(items);
                     setEditingItem(null);
                     setForm({
                       ...emptyForm,
-                      productId: nextId,
+                      productId: getNextProductId(items, emptyForm.receivalDate),
                     });
                     setDialogOpen(true);
                   }}
@@ -697,7 +707,7 @@ export default function InventoryPage() {
             setEditingItem(null);
             setForm({
               ...emptyForm,
-              productId: getNextProductId(items),
+              productId: getNextProductId(items, emptyForm.receivalDate),
             });
           }
         }}
@@ -723,7 +733,7 @@ export default function InventoryPage() {
                   <Button
                     type="button"
                     variant="ghost"
-                    size="xs"
+                    size="sm"
                     className="h-6 px-2 text-xs"
                     disabled={!form.orderId}
                     onClick={() => {
@@ -748,7 +758,9 @@ export default function InventoryPage() {
                 <Input
                   type="date"
                   value={form.receivalDate}
-                  onChange={(e) => setForm((f) => ({ ...f, receivalDate: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, receivalDate: e.target.value }))
+                  }
                 />
               </div>
               <div className="space-y-1.5">

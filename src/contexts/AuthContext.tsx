@@ -5,7 +5,7 @@ export type UserRole = "admin" | "editor" | "viewer";
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email: string; // used as username in UI
   role: UserRole;
   avatar?: string;
 }
@@ -18,9 +18,9 @@ interface AuthContextType {
 }
 
 const mockUsers: Record<string, User & { password: string }> = {
-  "admin@jedoms.com": { id: "1", name: "Jed Santos", email: "admin@jedoms.com", role: "admin", password: "admin123" },
-  "editor@jedoms.com": { id: "2", name: "Maria Cruz", email: "editor@jedoms.com", role: "editor", password: "editor123" },
-  "viewer@jedoms.com": { id: "3", name: "Carlos Reyes", email: "viewer@jedoms.com", role: "viewer", password: "viewer123" },
+  jedzcartas06: { id: "1", name: "Jed Santos", email: "jedzcartas06", role: "admin", password: "jdzelevatech2026!" },
+  megbae29: { id: "2", name: "Meg Bae", email: "megbae29", role: "editor", password: "jdzelevatech2026!" },
+  maemae30: { id: "3", name: "Mae Mae", email: "maemae30", role: "viewer", password: "jdzelevatech2026!" },
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

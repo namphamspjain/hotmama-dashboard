@@ -73,17 +73,19 @@ const CHART_COLORS = [
   "hsl(220, 70%, 55%)", // Cost of Loss
   "hsl(160, 60%, 45%)", // Shipping fee
   "hsl(340, 65%, 55%)", // Agent fee
-  "hsl(30, 80%, 55%)",  // Delivery fee
+  "hsl(30, 80%, 55%)",  // Salary
   "hsl(45, 90%, 55%)",  // Housing rental
   "hsl(280, 60%, 55%)", // Misc
 ];
 
+const SALARY_COST = 0;
 const HOUSING_RENTAL_COST = 0;
 const MISCELLANEOUS_COST = 0;
 
 const emptyForm = {
   retailerId: "", productName: "", productType: "", quantity: "1",
   sellingPrice: "", wholesalePrice: "", deliveryFee: "0",
+  warrantyDays: "30",
   saleDate: new Date().toISOString().slice(0, 10),
   deliveryStatus: "pending" as DeliveryStatus,
 };
@@ -122,7 +124,7 @@ export default function SalesPage() {
   const metrics = useMemo(() => {
     const totalRevenue = visibleSales.reduce((s, sl) => s + sl.revenue, 0);
     const totalCost = visibleSales.reduce(
-      (s, sl) => s + sl.wholesalePrice * sl.quantity + sl.deliveryFee,
+      (s, sl) => s + sl.wholesalePrice * sl.quantity,
       0,
     );
     const totalProfit = totalRevenue - totalCost;
@@ -132,52 +134,12 @@ export default function SalesPage() {
     return { totalRevenue, totalCost, totalProfit, margin, pending, refunded };
   }, [visibleSales]);
 
-  const costBreakdown = useMemo(() => {
-    // Unit import cost per order (PHP per item)
-    const unitImportCostByOrder: Record<string, number> = {};
-    orders.forEach((o) => {
-      if (o.quantity > 0) {
-        unitImportCostByOrder[o.id] = Math.round(o.importCostPhp / o.quantity);
-      }
+  const salesByProductType = useMemo(() => {
+    const byType: Record<string, number> = {};
+    visibleSales.forEach((sl) => {
+      byType[sl.productType] = (byType[sl.productType] ?? 0) + sl.revenue;
     });
-
-    // 1) Cost of Loss: damaged + lost inventory at import unit cost
-    const costOfLoss = inventory.reduce((sum, item) => {
-      if (item.status !== "damaged" && item.status !== "lost") return sum;
-      const unit = unitImportCostByOrder[item.orderId];
-      if (!unit) return sum;
-      return sum + unit;
-    }, 0);
-
-    // 2) Shipping fee: sum supplier shippingFee for all orders
-    const shippingFee = orders.reduce((sum, o) => {
-      const sup = suppliers.find((s) => s.id === o.supplierId);
-      return sum + (sup?.shippingFee ?? 0);
-    }, 0);
-
-    // 3) Agent fee: import cost * agent percent
-    const agentFee = orders.reduce((sum, o) => {
-      const agt = agents.find((a) => a.id === o.agentId);
-      if (!agt) return sum;
-      return sum + o.importCostPhp * (agt.feePercent / 100);
-    }, 0);
-
-    // 4) Delivery fee: from sales
-    const deliveryFee = visibleSales.reduce((sum, sl) => sum + sl.deliveryFee, 0);
-
-    // 5) Housing rental and 6) Misc costs
-    const housingRental = HOUSING_RENTAL_COST;
-    const misc = MISCELLANEOUS_COST;
-
-    // Always return all 6 slices (even if some are 0) so legend shows everything
-    return [
-      { name: "Cost of Loss", value: costOfLoss },
-      { name: "Shipping Fee", value: shippingFee },
-      { name: "Agent Fee", value: agentFee },
-      { name: "Delivery Fee", value: deliveryFee },
-      { name: "Housing Rental Cost", value: housingRental },
-      { name: "Miscellaneous Cost", value: misc },
-    ];
+    return Object.entries(byType).map(([name, value]) => ({ name, value }));
   }, [visibleSales]);
 
   const revenueByRetailer = useMemo(() => {
@@ -207,7 +169,7 @@ export default function SalesPage() {
     visibleSales.forEach((sl) => {
       const key = sl.saleDate;
       if (!byDate[key]) byDate[key] = { revenue: 0, cost: 0, profit: 0 };
-      const cost = sl.wholesalePrice * sl.quantity + sl.deliveryFee;
+      const cost = sl.wholesalePrice * sl.quantity;
       byDate[key].revenue += sl.revenue;
       byDate[key].cost += cost;
       byDate[key].profit += sl.netProfit;
@@ -280,11 +242,12 @@ export default function SalesPage() {
       quantity: parseInt(form.quantity),
       sellingPrice: parseFloat(form.sellingPrice),
       wholesalePrice: parseFloat(form.wholesalePrice) || 0,
-      deliveryFee: parseFloat(form.deliveryFee) || 0,
+      deliveryFee: 0,
       revenue: formCalc.revenue,
       netProfit: formCalc.grossProfit,
       deliveryStatus: form.deliveryStatus,
       saleDate: form.saleDate,
+      warrantyDays: parseInt(form.warrantyDays) || 0,
     };
     if (editingSale) {
       setSales((prev) => prev.map((s) => (s.id === editingSale.id ? sale : s)));
@@ -491,12 +454,24 @@ export default function SalesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Cost Breakdown</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Sales by Product Type</CardTitle>
+          </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={costBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
-                  {costBreakdown.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
+                <Pie
+                  data={salesByProductType}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {salesByProductType.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
                 </Pie>
                 <Tooltip formatter={(v: number) => formatCurrency(v)} />
                 <Legend />
@@ -526,7 +501,7 @@ export default function SalesPage() {
             <CardTitle className="text-lg">Sales</CardTitle>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => {
-                const headers = ["Sale ID", "Retailer", "Product Type", "Product Name", "Qty", "Selling Price", "Wholesale Price", "Revenue", "Gross Profit", "Delivery", "Delivery Fee", "Sale Date"];
+                const headers = ["Sale ID", "Retailer", "Product Type", "Product Name", "Qty", "Selling Price", "Wholesale Price", "Revenue", "Gross Profit", "Delivery", "Warranty (days)", "Sale Date"];
                 const rows = filtered.map((sl) => [
                   sl.id,
                   getRetailerName(sl.retailerId),
@@ -538,7 +513,7 @@ export default function SalesPage() {
                   String(sl.revenue),
                   String(getGrossProfit(sl)),
                   sl.deliveryStatus,
-                  String(sl.deliveryFee),
+                  String(sl.warrantyDays ?? 0),
                   sl.saleDate,
                 ]);
                 downloadCSV("sales.csv", headers, rows);
@@ -616,7 +591,7 @@ export default function SalesPage() {
                     <span className="flex items-center justify-end">Gross Profit <SortIcon field="grossProfit" /></span>
                   </TableHead>
                   <TableHead>Delivery</TableHead>
-                  <TableHead className="text-right">Delivery Fee</TableHead>
+                  <TableHead className="text-right">Warranty (days)</TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("saleDate")}>
                     <span className="flex items-center">Sale Date <SortIcon field="saleDate" /></span>
                   </TableHead>
@@ -645,8 +620,8 @@ export default function SalesPage() {
                         <TableCell className="text-sm text-right">{formatCurrency(sl.sellingPrice)}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{formatCurrency(sl.revenue)}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{formatCurrency(grossProfit)}</TableCell>
-                        <TableCell><Badge variant="outline" className={db.cls}>{db.label}</Badge></TableCell>
-                        <TableCell className="text-sm text-right text-muted-foreground">{formatCurrency(sl.deliveryFee)}</TableCell>
+                    <TableCell><Badge variant="outline" className={db.cls}>{db.label}</Badge></TableCell>
+                    <TableCell className="text-sm text-right text-muted-foreground">{sl.warrantyDays ?? 0}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{sl.saleDate}</TableCell>
                         {canEdit && (
                           <TableCell className="text-right align-middle">
@@ -665,8 +640,9 @@ export default function SalesPage() {
                                         productType: sl.productType,
                                         quantity: String(sl.quantity),
                                         sellingPrice: String(sl.sellingPrice),
-                                        wholesalePrice: String(sl.wholesalePrice),
-                                        deliveryFee: String(sl.deliveryFee),
+                                      wholesalePrice: String(sl.wholesalePrice),
+                                      deliveryFee: "0",
+                                      warrantyDays: String(sl.warrantyDays ?? 30),
                                         saleDate: sl.saleDate,
                                         deliveryStatus: sl.deliveryStatus,
                                       });
@@ -770,11 +746,29 @@ export default function SalesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Wholesale Price (₱)</Label>
-                <Input type="number" min="0" value={form.wholesalePrice} onChange={(e) => setForm((f) => ({ ...f, wholesalePrice: e.target.value }))} />
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.wholesalePrice}
+                  onChange={(e) => setForm((f) => ({ ...f, wholesalePrice: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>Delivery Fee (₱)</Label>
-                <Input type="number" min="0" value={form.deliveryFee} onChange={(e) => setForm((f) => ({ ...f, deliveryFee: e.target.value }))} />
+                <Label>Warranty (days)</Label>
+                <Select
+                  value={form.warrantyDays}
+                  onValueChange={(v) => setForm((f) => ({ ...f, warrantyDays: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="45">45</SelectItem>
+                    <SelectItem value="60">60</SelectItem>
+                    <SelectItem value="90">90</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="rounded-md bg-muted p-3 grid grid-cols-3 gap-2 text-center">

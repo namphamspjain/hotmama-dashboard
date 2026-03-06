@@ -24,7 +24,7 @@ const Login = () => {
     if (success) {
       navigate("/");
     } else {
-      setError("Invalid email or password");
+      setError("Invalid username or password");
     }
   };
 
@@ -41,8 +41,8 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="admin@jedoms.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Label htmlFor="email">Username</Label>
+              <Input id="email" type="text" placeholder="jedzcartas06" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -53,7 +53,7 @@ const Login = () => {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
             <p className="text-xs text-center text-muted-foreground">
-              Demo: admin@jedoms.com / admin123
+              Demo: jedzcartas06 / jdzelevatech2026!
             </p>
           </form>
         </CardContent>

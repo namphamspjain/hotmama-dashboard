@@ -354,10 +354,7 @@ const DashboardPage = () => {
     const ordersShipping = visibleOrders.filter((o) => o.shippingStatus === "shipping").length;
     const ordersReceived = visibleOrders.filter((o) => o.shippingStatus === "received").length;
     const totalImportCost = visibleOrders.reduce((s, o) => s + o.importCostPhp, 0);
-    const totalShippingFees = visibleOrders.reduce((s, o) => {
-      const sup = suppliers.find((sp) => sp.id === o.supplierId);
-      return s + (sup?.shippingFee ?? 0);
-    }, 0);
+    const totalShippingFees = visibleOrders.reduce((s, o) => s + (o.shippingFee ?? 0), 0);
     const totalAgentFees = visibleOrders.reduce((s, o) => {
       const agt = agents.find((a) => a.id === o.agentId);
       return s + (agt ? o.importCostPhp * (agt.feePercent / 100) : 0);
@@ -574,10 +571,7 @@ const DashboardPage = () => {
       return sum + unit;
     }, 0);
 
-    const shippingFee = orders.reduce((sum, o) => {
-      const sup = suppliers.find((s) => s.id === o.supplierId);
-      return sum + (sup?.shippingFee ?? 0);
-    }, 0);
+    const shippingFee = orders.reduce((sum, o) => sum + (o.shippingFee ?? 0), 0);
 
     const agentFee = orders.reduce((sum, o) => {
       const agt = agents.find((a) => a.id === o.agentId);
@@ -632,13 +626,23 @@ const statusColor: Record<string, string> = {
         .slice(0, 5),
     [visiblePayments],
   );
-  const recentDeliveries = useMemo(
+  const recentSales = useMemo(
     () =>
       [...visibleSales]
         .sort((a, b) => b.saleDate.localeCompare(a.saleDate))
         .slice(0, 5),
     [visibleSales],
   );
+
+  const retailerPaymentBySaleId = useMemo(() => {
+    const map: Record<string, string> = {};
+    visiblePayments
+      .filter((p) => p.type === "retailer")
+      .forEach((p) => {
+        map[p.linkedId] = String(p.status);
+      });
+    return map;
+  }, [visiblePayments]);
 
   const shippingBadgeStyles: Record<
     string,
@@ -1676,21 +1680,21 @@ const statusColor: Record<string, string> = {
           </CardContent>
         </Card>
 
-        {/* Recent deliveries */}
+        {/* Recent sales */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-semibold">Recent Deliveries</CardTitle>
+            <CardTitle className="text-base font-semibold">Recent Sales</CardTitle>
             <button onClick={() => navigate("/sales")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               View all <ArrowRight className="h-3 w-3" />
             </button>
           </CardHeader>
           <CardContent>
-            {recentDeliveries.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No deliveries yet.</p>
+            {recentSales.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No sales yet.</p>
             ) : (
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {recentDeliveries.map((s) => {
-                  const cfg =
+                {recentSales.map((s) => {
+                  const deliveryCfg =
                     s.deliveryStatus === "pending"
                       ? {
                           label: "Pending",
@@ -1705,19 +1709,39 @@ const statusColor: Record<string, string> = {
                           label: "Refunded",
                           cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
                         };
+
+                  const paymentStatusKey = retailerPaymentBySaleId[s.id] as
+                    | "unsold"
+                    | "pending"
+                    | "sold"
+                    | "refunded"
+                    | undefined;
+                  const paymentCfg = paymentStatusKey
+                    ? retailerPayStatusStyles[paymentStatusKey]
+                    : undefined;
+
                   return (
                     <div key={s.id} className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{s.productName}</p>
+                        <p className="text-sm font-medium truncate">{s.productType}</p>
                         <p className="text-xs text-muted-foreground">
-                          {getRetailerName(s.retailerId)} · {s.quantity} pcs
+                          {s.productName} · {s.quantity} pcs
                         </p>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.cls}`}
-                      >
-                        {cfg.label}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${deliveryCfg.cls}`}
+                        >
+                          {deliveryCfg.label}
+                        </span>
+                        {paymentCfg && (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${paymentCfg.cls}`}
+                          >
+                            {paymentCfg.label}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
