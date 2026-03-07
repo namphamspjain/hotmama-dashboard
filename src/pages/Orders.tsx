@@ -50,7 +50,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   orders as mockOrders, suppliers, agents, Order, ShippingStatus, PayStatus,
-  formatCurrency, getSupplierName, getAgentName,
+  formatCurrency, getSupplierName, getAgentName, payments,
 } from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadCSV } from "@/lib/csv";
@@ -162,9 +162,10 @@ export default function OrdersPage() {
     const totalPurchased = visibleOrders.reduce((s, o) => s + o.quantity, 0);
     const shipping = visibleOrders.reduce((s, o) => s + (o.shippingStatus === "shipping" ? o.quantity : 0), 0);
     const received = visibleOrders.reduce((s, o) => s + (o.shippingStatus === "received" ? o.quantity : 0), 0);
-    const totalUnitPrice = visibleOrders.reduce((s, o) => s + o.importUnitPriceYuan, 0);
-    const totalImportCost = visibleOrders.reduce((s, o) => s + o.importCostPhp, 0);
-    return { totalPurchased, shipping, received, totalUnitPrice, totalImportCost };
+    const totalUnitPrice = visibleOrders.reduce((s, o) => s + (o.importUnitPriceYuan * o.exchangeRate * o.quantity), 0);
+    const totalImportCost = visibleOrders.reduce((s, o) => s + (o.importCostPhp * o.quantity), 0);
+    const costOfGoods = visibleOrders.reduce((s, o) => s + ((o.importUnitPriceYuan * o.exchangeRate + o.importCostPhp) * o.quantity), 0);
+    return { totalPurchased, shipping, received, totalUnitPrice, totalImportCost, costOfGoods };
   }, [visibleOrders]);
 
   const productTypes = useMemo(
@@ -287,8 +288,9 @@ export default function OrdersPage() {
     { label: "Total Purchased", value: metrics.totalPurchased.toString(), icon: Package, sub: "items" },
     { label: "Shipping", value: metrics.shipping.toString(), icon: Ship, sub: "items" },
     { label: "Received", value: metrics.received.toString(), icon: CheckCircle2, sub: "items" },
-    { label: "Unit Price", value: formatYuan(metrics.totalUnitPrice), icon: DollarSign },
+    { label: "Unit Price", value: formatCurrency(metrics.totalUnitPrice), icon: DollarSign },
     { label: "Import Cost", value: formatCurrency(metrics.totalImportCost), icon: DollarSign },
+    { label: "Cost of Goods", value: formatCurrency(metrics.costOfGoods), icon: DollarSign },
   ];
 
   const ordersTrendData = useMemo(() => {
@@ -334,7 +336,7 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       {/* Metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {metricCards.map((m) => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -685,7 +687,7 @@ export default function OrdersPage() {
                       const pb = payBadge[o.payStatus];
                       const unitPriceYuan = o.importUnitPriceYuan;
                       const importCost = o.importCostPhp;
-                      const receivalDisplay = formatShortDate(o.receivalDate);
+                      const receivalDisplay = o.receivalDate || "—";
                       return (
                         <TableRow
                           key={o.id}
@@ -710,7 +712,12 @@ export default function OrdersPage() {
                             <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={pb.cls}>{pb.label}</Badge>
+                            {(() => {
+                              const payment = payments.find(p => p.type === "agent" && p.linkedId === o.id);
+                              const status = payment ? (payment.status as PayStatus) : o.payStatus;
+                              const cfg = payBadge[status];
+                              return <Badge variant="outline" className={cfg.cls}>{cfg.label}</Badge>;
+                            })()}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{o.orderDate}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{receivalDisplay}</TableCell>

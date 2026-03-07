@@ -8,7 +8,6 @@ import {
   suppliers,
   agents,
   formatCurrency,
-  getOverduePaymentsCount,
   getRetailerName,
   getSupplierName,
 } from "@/data/mock-data";
@@ -57,7 +56,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 /* ─── Shared helpers & config types ─── */
-const paymentsOverdueCount = getOverduePaymentsCount();
+const paymentsOverdueCount = payments.filter((p) => p.status === "overdue").length;
 
 type MetricKey =
   // Orders

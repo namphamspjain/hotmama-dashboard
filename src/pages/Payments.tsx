@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -74,11 +75,6 @@ const statusBadgeRetailer = (s: RetailerPayStatus) => {
   return <Badge variant="outline" className={cfg.cls}>{cfg.label}</Badge>;
 };
 
-const getDisplayPayId = (p: Payment): string => {
-  const num = p.id.replace(/^PAY-(\d+)$/, "$1");
-  return p.type === "agent" ? `PAY-AG-${num}` : `PAY-RT-${num}`;
-};
-
 const getOrderDate = (p: Payment): string => {
   if (p.type === "agent") {
     return orders.find((o) => o.id === p.linkedId)?.orderDate ?? p.dueDate;
@@ -86,16 +82,23 @@ const getOrderDate = (p: Payment): string => {
   return sales.find((s) => s.id === p.linkedId)?.saleDate ?? p.dueDate;
 };
 
-const getNextPayId = (list: Payment[]): string => {
+const getNextPayId = (list: Payment[], type: PaymentType, dueDate: string): string => {
+  const dateKey = dueDate.replace(/-/g, "");
+  const prefix = type === "agent" ? "PAY-AG" : "PAY-RT";
   let max = 0;
   list.forEach((p) => {
-    const m = p.id.match(/^PAY-(\d+)$/);
-    if (m) max = Math.max(max, parseInt(m[1], 10));
+    const match = p.id.match(new RegExp(`^${prefix}-(\\d{8})-(\\d{3})$`));
+    if (match && match[1] === dateKey) {
+      const n = parseInt(match[2], 10);
+      if (n > max) max = n;
+    }
   });
-  return `PAY-${String(max + 1).padStart(3, "0")}`;
+  const next = max + 1;
+  return `${prefix}-${dateKey}-${String(next).padStart(3, "0")}`;
 };
 
 const emptyForm = {
+  payId: "",
   type: "agent" as PaymentType,
   partnerName: "",
   linkedId: "",
@@ -107,6 +110,7 @@ const emptyForm = {
 
 const PaymentsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const canEdit = user?.role === "admin" || user?.role === "editor";
 
   const [data, setData] = useState<Payment[]>(initialPayments);
@@ -153,13 +157,23 @@ const PaymentsPage = () => {
     let filtered = visiblePayments.filter((p) => p.type === type);
     if (search) {
       const q = search.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.id.toLowerCase().includes(q) ||
-          getDisplayPayId(p).toLowerCase().includes(q) ||
-          p.partnerName.toLowerCase().includes(q) ||
-          p.linkedId.toLowerCase().includes(q),
-      );
+      filtered = filtered.filter((p) => {
+        const statusLabel =
+          p.type === "agent"
+            ? agentPayBadge[p.status as PayStatus]?.label
+            : retailerPayBadge[p.status as RetailerPayStatus]?.label;
+
+        const fields = [
+          p.id,
+          p.partnerName,
+          p.linkedId,
+          String(p.amount),
+          statusLabel || "",
+          getOrderDate(p),
+          p.paidDate || "—",
+        ];
+        return fields.some((f) => f.toLowerCase().includes(q));
+      });
     }
     if (statusFilter !== "all") {
       const agentStatuses: PayStatus[] = ["paid", "unpaid", "overdue"];
@@ -182,6 +196,17 @@ const PaymentsPage = () => {
 
   const agentPayments = filterAndSort("agent");
   const retailerPayments = filterAndSort("retailer");
+
+  // Auto-switch tabs if searching yields results in the other tab only
+  useEffect(() => {
+    if (search) {
+      if (activeTab === "agents" && agentPayments.length === 0 && retailerPayments.length > 0) {
+        setActiveTab("retailers");
+      } else if (activeTab === "retailers" && retailerPayments.length === 0 && agentPayments.length > 0) {
+        setActiveTab("agents");
+      }
+    }
+  }, [search, activeTab, agentPayments.length, retailerPayments.length]);
 
   const metrics = useMemo(() => {
     const agents = visiblePayments.filter((p) => p.type === "agent");
@@ -214,15 +239,26 @@ const PaymentsPage = () => {
     };
   }, [visiblePayments]);
 
+  // Sync Pay ID with due date / type
+  useEffect(() => {
+    if (!paymentDialogOpen) return;
+    if (editingPayment) return;
+    if (!form.dueDate) return;
+    const nextId = getNextPayId(data, form.type, form.dueDate);
+    if (form.payId === nextId) return;
+    setForm((prev) => ({ ...prev, payId: nextId }));
+  }, [paymentDialogOpen, editingPayment, form.dueDate, form.type, data]);
+
   const openNewPayment = () => {
     setEditingPayment(null);
-    setForm({ ...emptyForm, dueDate: new Date().toISOString().slice(0, 10) });
+    setForm({ ...emptyForm, payId: getNextPayId(data, emptyForm.type, emptyForm.dueDate), dueDate: new Date().toISOString().slice(0, 10) });
     setPaymentDialogOpen(true);
   };
 
   const openEditPayment = (p: Payment) => {
     setEditingPayment(p);
     setForm({
+      payId: p.id,
       type: p.type,
       partnerName: p.partnerName,
       linkedId: p.linkedId,
@@ -256,7 +292,7 @@ const PaymentsPage = () => {
         ),
       );
     } else {
-      const id = getNextPayId(data);
+      const id = getNextPayId(data, form.type, form.dueDate);
       setData((prev) =>
         prev.concat({
           id,
@@ -296,15 +332,15 @@ const PaymentsPage = () => {
           <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[120px]"><SortHeader label="Pay ID" k="id" /></TableHead>
-          <TableHead className="w-[220px]">{type === "agent" ? "Agent" : "Retailer"}</TableHead>
-          <TableHead className="w-[150px]">{type === "agent" ? "Order ID" : "Sale ID"}</TableHead>
-          <TableHead className="w-[120px] text-right"><SortHeader label="Amount" k="amount" /></TableHead>
-          <TableHead className="w-[120px]">Status</TableHead>
-          <TableHead className="w-[130px]">
+          <TableHead className="whitespace-nowrap"><SortHeader label="Pay ID" k="id" /></TableHead>
+          <TableHead className="whitespace-nowrap">{type === "agent" ? "Agent" : "Retailer"}</TableHead>
+          <TableHead className="whitespace-nowrap">{type === "agent" ? "Order ID" : "Sale ID"}</TableHead>
+          <TableHead className="text-right whitespace-nowrap"><SortHeader label="Amount" k="amount" /></TableHead>
+          <TableHead className="whitespace-nowrap">Payment</TableHead>
+          <TableHead className="whitespace-nowrap">
             <SortHeader label={type === "retailer" ? "Sale Date" : "Order Date"} k="dueDate" />
           </TableHead>
-          <TableHead className="w-[130px]">Paid Date</TableHead>
+          <TableHead className="whitespace-nowrap">Paid Date</TableHead>
           {canEdit && <TableHead className="w-10" />}
         </TableRow>
       </TableHeader>
@@ -327,15 +363,15 @@ const PaymentsPage = () => {
               p.type === "retailer" && p.status === "refunded" && "bg-red-500/5",
             )}
           >
-            <TableCell className="font-mono text-xs">{getDisplayPayId(p)}</TableCell>
+            <TableCell className="font-mono text-xs whitespace-nowrap">{p.id}</TableCell>
             <TableCell className="font-medium max-w-[220px] truncate">{p.partnerName}</TableCell>
-            <TableCell className="font-mono text-xs">{p.linkedId}</TableCell>
-            <TableCell className="font-semibold text-right">{formatCurrency(p.amount)}</TableCell>
-            <TableCell>
+            <TableCell className="font-mono text-xs whitespace-nowrap">{p.linkedId}</TableCell>
+            <TableCell className="font-semibold text-right whitespace-nowrap">{formatCurrency(p.amount)}</TableCell>
+            <TableCell className="whitespace-nowrap">
               {p.type === "agent" ? statusBadgeAgent(p.status as PayStatus) : statusBadgeRetailer(p.status as RetailerPayStatus)}
             </TableCell>
-            <TableCell>{getOrderDate(p)}</TableCell>
-            <TableCell>{p.paidDate ?? "—"}</TableCell>
+            <TableCell className="whitespace-nowrap">{getOrderDate(p)}</TableCell>
+            <TableCell className="whitespace-nowrap">{p.paidDate ?? "—"}</TableCell>
             {canEdit && (
               <TableCell className="text-right align-middle">
                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -670,7 +706,7 @@ const PaymentsPage = () => {
                   const all = [...agentPayments, ...retailerPayments];
                   const headers = ["Pay ID", "Type", "Partner", "Order ID", "Amount", "Status", "Order Date", "Paid Date"];
                   const rows = all.map((p) => [
-                    getDisplayPayId(p),
+                    p.id,
                     p.type,
                     p.partnerName,
                     p.linkedId,
@@ -699,9 +735,9 @@ const PaymentsPage = () => {
               <Input placeholder="Search payments…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Payment" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="all">All Payment</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="unpaid">Unpaid</SelectItem>
                   <SelectItem value="overdue">Canceled</SelectItem>
@@ -737,12 +773,11 @@ const PaymentsPage = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
+            <div className="gap-2 space-y-1.5">
               <Label>Pay ID</Label>
               <Input
-                readOnly
-                className="font-mono bg-muted"
-                value={editingPayment ? getDisplayPayId(editingPayment) : `PAY-${form.type === "agent" ? "AG" : "RT"}-${getNextPayId(data).replace(/^PAY-/, "")}`}
+                disabled
+                value={form.payId}
               />
             </div>
             <div className="grid gap-2">
@@ -780,12 +815,81 @@ const PaymentsPage = () => {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>{form.type === "agent" ? "Order ID" : "Sale ID"}</Label>
-              <Input
-                value={form.linkedId}
-                onChange={(e) => setForm((f) => ({ ...f, linkedId: e.target.value }))}
-                placeholder={form.type === "agent" ? "e.g. OD-20260110-001" : "e.g. SL-20260125-001"}
-              />
+              <Label className="flex items-center justify-between">
+                <span>{form.type === "agent" ? "Order ID" : "Sale ID"}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  disabled={!form.linkedId}
+                  onClick={() => {
+                    if (!form.linkedId) return;
+                    setPaymentDialogOpen(false);
+                    if (form.type === "agent") {
+                      navigate("/orders", { state: { highlightOrderId: form.linkedId } });
+                    } else {
+                      navigate("/sales", { state: { highlightSaleId: form.linkedId } });
+                    }
+                  }}
+                >
+                  {form.type === "agent" ? "View in Orders" : "View in Sales"}
+                </Button>
+              </Label>
+              <div className="relative">
+                <Input
+                  value={form.linkedId}
+                  onChange={(e) => setForm((f) => ({ ...f, linkedId: e.target.value }))}
+                  placeholder={form.type === "agent" ? "Search order ID..." : "Search sale ID..."}
+                  autoComplete="off"
+                />
+                {form.linkedId && (() => {
+                  const q = form.linkedId.toLowerCase();
+                  if (form.type === "agent") {
+                    const matches = orders
+                      .filter((o) => o.id.toLowerCase().includes(q))
+                      .slice(0, 8);
+                    const exactMatch = orders.some((o) => o.id === form.linkedId);
+                    if (matches.length === 0 || exactMatch) return null;
+                    return (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover shadow-md max-h-[180px] overflow-y-auto">
+                        {matches.map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between"
+                            onClick={() => setForm((f) => ({ ...f, linkedId: o.id }))}
+                          >
+                            <span className="font-mono text-xs">{o.id}</span>
+                            <span className="text-xs text-muted-foreground truncate ml-2">{o.productName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  } else {
+                    const matches = sales
+                      .filter((s) => s.id.toLowerCase().includes(q))
+                      .slice(0, 8);
+                    const exactMatch = sales.some((s) => s.id === form.linkedId);
+                    if (matches.length === 0 || exactMatch) return null;
+                    return (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover shadow-md max-h-[180px] overflow-y-auto">
+                        {matches.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between"
+                            onClick={() => setForm((f) => ({ ...f, linkedId: s.id }))}
+                          >
+                            <span className="font-mono text-xs">{s.id}</span>
+                            <span className="text-xs text-muted-foreground truncate ml-2">{s.productName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
             </div>
             <div className="grid gap-2">
               <Label>Amount (centavos)</Label>
@@ -798,7 +902,7 @@ const PaymentsPage = () => {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Status</Label>
+              <Label>Payment</Label>
               <Select
                 value={form.status}
                 onValueChange={(v) => setForm((f) => ({ ...f, status: v as PayStatus | RetailerPayStatus }))}

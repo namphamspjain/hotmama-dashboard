@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { InventoryProvider } from "@/contexts/InventoryContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
@@ -29,23 +30,25 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<ProtectedPage><Dashboard /></ProtectedPage>} />
-              <Route path="/orders" element={<ProtectedPage><Orders /></ProtectedPage>} />
-              <Route path="/inventory" element={<ProtectedPage><Inventory /></ProtectedPage>} />
-              <Route path="/sales" element={<ProtectedPage><Sales /></ProtectedPage>} />
-              <Route path="/costs" element={<ProtectedPage><Cost /></ProtectedPage>} />
-              <Route path="/payments" element={<ProtectedPage><Payments /></ProtectedPage>} />
-              <Route path="/settings" element={<ProtectedPage><Settings /></ProtectedPage>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+        <InventoryProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<ProtectedPage><Dashboard /></ProtectedPage>} />
+                <Route path="/orders" element={<ProtectedPage><Orders /></ProtectedPage>} />
+                <Route path="/inventory" element={<ProtectedPage><Inventory /></ProtectedPage>} />
+                <Route path="/sales" element={<ProtectedPage><Sales /></ProtectedPage>} />
+                <Route path="/costs" element={<ProtectedPage><Cost /></ProtectedPage>} />
+                <Route path="/payments" element={<ProtectedPage><Payments /></ProtectedPage>} />
+                <Route path="/settings" element={<ProtectedPage><Settings /></ProtectedPage>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </InventoryProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

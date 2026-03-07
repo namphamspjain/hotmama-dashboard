@@ -39,12 +39,15 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
+import { useInventory } from "@/contexts/InventoryContext";
 import {
   costs as mockCosts,
+  orders as mockOrders,
   type CostItem,
   type CostType,
   formatCurrency,
 } from "@/data/mock-data";
+import { Package, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import {
@@ -59,18 +62,16 @@ type SortField = "id" | "costDate" | "amount";
 type SortDir = "asc" | "desc";
 
 const COST_COLORS: Record<CostType, string> = {
+  "Cost of Goods": "hsl(140, 60%, 45%)",
   "Cost of Loss": "hsl(220, 70%, 55%)",
-  "Shipping Fees": "hsl(160, 60%, 45%)",
-  "Agent Fees": "hsl(340, 65%, 55%)",
   Salary: "hsl(30, 80%, 55%)",
   "Housing Rental": "hsl(45, 90%, 55%)",
   Miscellaneous: "hsl(280, 60%, 55%)",
 };
 
 const COST_TYPES: CostType[] = [
+  "Cost of Goods",
   "Cost of Loss",
-  "Shipping Fees",
-  "Agent Fees",
   "Salary",
   "Housing Rental",
   "Miscellaneous",
@@ -78,7 +79,7 @@ const COST_TYPES: CostType[] = [
 
 const emptyForm = {
   id: "",
-  type: "Cost of Loss" as CostType,
+  type: "Cost of Goods" as CostType,
   note: "",
   amount: "",
   costDate: new Date().toISOString().slice(0, 10),
@@ -102,8 +103,11 @@ function getNextCostId(costs: CostItem[], costDate: string): string {
 export default function CostPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "editor";
+  const { costOfLossEntries, costOfLossTotal } = useInventory();
 
-  const [costs, setCosts] = useState<CostItem[]>(mockCosts);
+  const [costs, setCosts] = useState<CostItem[]>(() =>
+    mockCosts.filter((c) => c.type !== "Cost of Loss")
+  );
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<CostType | "all">("all");
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
@@ -120,11 +124,17 @@ export default function CostPage() {
   const [form, setForm] = useState<typeof emptyForm>(emptyForm);
   const [editingCost, setEditingCost] = useState<CostItem | null>(null);
 
+  // Merge manually-entered costs with auto-generated Cost of Loss entries
+  const allCosts = useMemo(() => [
+    ...costs,
+    ...costOfLossEntries,
+  ], [costs, costOfLossEntries]);
+
   const visibleCosts = useMemo(() => {
-    if (!dateRange.from && !dateRange.to) return costs;
+    if (!dateRange.from && !dateRange.to) return allCosts;
     const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
     const toTs = dateRange.to ? dateRange.to.setHours(23, 59, 59, 999) : null;
-    return costs.filter((c) => {
+    return allCosts.filter((c) => {
       const d = new Date(c.costDate);
       const ts = d.getTime();
       if (Number.isNaN(ts)) return true;
@@ -132,22 +142,41 @@ export default function CostPage() {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [costs, dateRange.from, dateRange.to]);
+  }, [allCosts, dateRange.from, dateRange.to]);
+
+  const visibleOrdersForCoG = useMemo(() => {
+    if (!dateRange.from && !dateRange.to) return mockOrders;
+    const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
+    const toTs = dateRange.to ? dateRange.to.setHours(23, 59, 59, 999) : null;
+    return mockOrders.filter((o) => {
+      const d = new Date(o.orderDate);
+      const ts = d.getTime();
+      if (Number.isNaN(ts)) return true;
+      if (fromTs !== null && ts < fromTs) return false;
+      if (toTs !== null && ts > toTs) return false;
+      return true;
+    });
+  }, [dateRange.from, dateRange.to]);
+
+  const cogValue = useMemo(() => {
+    return visibleOrdersForCoG.reduce((s, o) => s + ((o.importUnitPriceYuan * o.exchangeRate + o.importCostPhp) * o.quantity), 0);
+  }, [visibleOrdersForCoG]);
 
   const metrics = useMemo(() => {
     const totals: Record<CostType, number> = {
-      "Cost of Loss": 0,
-      "Shipping Fees": 0,
-      "Agent Fees": 0,
+      "Cost of Goods": cogValue,
+      "Cost of Loss": costOfLossTotal,
       Salary: 0,
       "Housing Rental": 0,
       Miscellaneous: 0,
     };
     visibleCosts.forEach((c) => {
-      totals[c.type] += c.amount;
+      if (c.type !== "Cost of Loss") {
+        totals[c.type] += c.amount;
+      }
     });
     return totals;
-  }, [visibleCosts]);
+  }, [visibleCosts, costOfLossTotal]);
 
   const costBreakdownData = useMemo(
     () =>
@@ -160,15 +189,29 @@ export default function CostPage() {
     visibleCosts.forEach((c) => {
       if (!byDate[c.costDate]) {
         byDate[c.costDate] = {
+          "Cost of Goods": 0,
           "Cost of Loss": 0,
-          "Shipping Fees": 0,
-          "Agent Fees": 0,
           Salary: 0,
           "Housing Rental": 0,
           Miscellaneous: 0,
         };
       }
       byDate[c.costDate][c.type] += c.amount;
+    });
+
+    // Inject order-based CoG into trend data
+    visibleOrdersForCoG.forEach((o) => {
+      if (!byDate[o.orderDate]) {
+        byDate[o.orderDate] = {
+          "Cost of Goods": 0,
+          "Cost of Loss": 0,
+          Salary: 0,
+          "Housing Rental": 0,
+          Miscellaneous: 0,
+        };
+      }
+      const val = (o.importUnitPriceYuan * o.exchangeRate + o.importCostPhp) * o.quantity;
+      byDate[o.orderDate]["Cost of Goods"] += val;
     });
     return Object.entries(byDate)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -179,12 +222,17 @@ export default function CostPage() {
     let list = [...visibleCosts];
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(
-        (c) =>
-          c.id.toLowerCase().includes(q) ||
-          c.type.toLowerCase().includes(q) ||
-          c.note.toLowerCase().includes(q),
-      );
+      list = list.filter((c) => {
+        const fields = [
+          c.id,
+          c.type,
+          c.note || "",
+          String(c.amount),
+          c.costDate,
+          c.receipt || "",
+        ];
+        return fields.some((f) => f.toLowerCase().includes(q));
+      });
     }
     if (typeFilter !== "all") {
       list = list.filter((c) => c.type === typeFilter);
@@ -263,9 +311,8 @@ export default function CostPage() {
   };
 
   const metricCards = [
+    { label: "Cost of Goods", value: formatCurrency(metrics["Cost of Goods"]), icon: Package },
     { label: "Cost of Loss", value: formatCurrency(metrics["Cost of Loss"]), icon: DollarSign },
-    { label: "Shipping Fees", value: formatCurrency(metrics["Shipping Fees"]), icon: DollarSign },
-    { label: "Agent Fees", value: formatCurrency(metrics["Agent Fees"]), icon: DollarSign },
     { label: "Salary", value: formatCurrency(metrics.Salary), icon: DollarSign },
     {
       label: "Housing Rental",
@@ -282,7 +329,7 @@ export default function CostPage() {
   return (
     <div className="space-y-6">
       {/* Metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {metricCards.map((m) => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -384,23 +431,44 @@ export default function CostPage() {
             <CardTitle className="text-sm font-semibold">Cost Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={390}>
               <PieChart>
                 <Pie
                   data={costBreakdownData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={4}
+                  innerRadius={71.5}
+                  outerRadius={117}
+                  paddingAngle={3}
                   dataKey="value"
+                  label={({ cx, cy, midAngle, outerRadius: oR, name, percent }) => {
+                    const RADIAN = Math.PI / 180;
+                    const radius = oR + 36.4;
+                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                    return (
+                      <text
+                        x={x}
+                        y={y}
+                        textAnchor={x > cx ? "start" : "end"}
+                        dominantBaseline="central"
+                        className="fill-foreground"
+                        style={{ fontSize: 15.6, fontWeight: 600 }}
+                      >
+                        {name} {(percent * 100).toFixed(0)}%
+                      </text>
+                    );
+                  }}
+                  labelLine={{
+                    stroke: "hsl(var(--muted-foreground))",
+                    strokeWidth: 1,
+                  }}
                 >
                   {costBreakdownData.map((d) => (
                     <Cell key={d.name} fill={COST_COLORS[d.name as CostType]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -577,49 +645,60 @@ export default function CostPage() {
                       </TableCell>
                       {canEdit && (
                         <TableCell className="text-right align-middle">
-                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {c.type === "Cost of Loss" ? (
                             <UiTooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
-                                  onClick={() => {
-                                    setEditingCost(c);
-                                    setForm({
-                                      id: c.id,
-                                      type: c.type,
-                                      note: c.note,
-                                      amount: String(c.amount),
-                                      costDate: c.costDate,
-                                      receipt: c.receipt ?? "",
-                                    });
-                                    setDialogOpen(true);
-                                  }}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
+                                <Info className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
                               </TooltipTrigger>
                               <TooltipContent side="left">
-                                <p className="text-xs">Edit</p>
+                                <p className="text-xs">Auto-generated from Inventory</p>
                               </TooltipContent>
                             </UiTooltip>
-                            <UiTooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => handleDeleteCost(c.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                <p className="text-xs">Delete</p>
-                              </TooltipContent>
-                            </UiTooltip>
-                          </div>
+                          ) : (
+                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                    onClick={() => {
+                                      setEditingCost(c);
+                                      setForm({
+                                        id: c.id,
+                                        type: c.type,
+                                        note: c.note,
+                                        amount: String(c.amount),
+                                        costDate: c.costDate,
+                                        receipt: c.receipt ?? "",
+                                      });
+                                      setDialogOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Edit</p>
+                                </TooltipContent>
+                              </UiTooltip>
+                              <UiTooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleDeleteCost(c.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Delete</p>
+                                </TooltipContent>
+                              </UiTooltip>
+                            </div>
+                          )}
                         </TableCell>
                       )}
                     </TableRow>
@@ -803,11 +882,22 @@ export default function CostPage() {
             <div className="space-y-1.5">
               <Label>Receipt (optional)</Label>
               <Input
-                type="text"
-                value={form.receipt}
-                onChange={(e) => setForm((f) => ({ ...f, receipt: e.target.value }))}
-                placeholder="File name or link"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setForm((f) => ({ ...f, receipt: file.name }));
+                  } else {
+                    setForm((f) => ({ ...f, receipt: "" }));
+                  }
+                }}
               />
+              {form.receipt && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Selected: {form.receipt}
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -820,9 +910,24 @@ export default function CostPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={!form.amount || !form.costDate}>
-              {editingCost ? "Save Changes" : "Create Cost"}
-            </Button>
+            {form.type === "Cost of Loss" ? (
+              <UiTooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} className="inline-flex">
+                    <Button disabled className="pointer-events-none">
+                      {editingCost ? "Save Changes" : "Create Cost"}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[220px] text-center">
+                  <p className="text-xs">Cost of Loss is calculated automatically from the Inventory page.</p>
+                </TooltipContent>
+              </UiTooltip>
+            ) : (
+              <Button onClick={handleSubmit} disabled={!form.amount || !form.costDate}>
+                {editingCost ? "Save Changes" : "Create Cost"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

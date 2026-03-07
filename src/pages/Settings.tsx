@@ -17,6 +17,7 @@ import {
   formatCurrency,
 } from "@/data/mock-data";
 import { useAuth, type UserRole } from "@/contexts/AuthContext";
+import { useLocation } from "react-router-dom";
 import { Truck, Users, Building2, Store, UserCog, Plus, Pencil, Trash2, Search, ExternalLink, Ship, Eye, EyeOff } from "lucide-react";
 
 // ============ Partner helpers ============
@@ -31,6 +32,8 @@ const SettingsPage = () => {
   const { user, updateProfile } = useAuth();
   const isAdmin = user?.role === "admin";
   const canEdit = user?.role === "admin" || user?.role === "editor";
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<string>(location.state?.activeTab || "suppliers");
 
   // Partner state
   const [supplierList, setSupplierList] = useState<Supplier[]>(initSuppliers);
@@ -272,7 +275,7 @@ const SettingsPage = () => {
         <Input placeholder="Search partners or users…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
-      <Tabs defaultValue="suppliers">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="suppliers" className="gap-1"><Truck className="h-3.5 w-3.5" />Suppliers</TabsTrigger>
           <TabsTrigger value="agents" className="gap-1"><Users className="h-3.5 w-3.5" />Agents</TabsTrigger>

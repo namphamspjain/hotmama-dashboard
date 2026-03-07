@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   DollarSign, TrendingUp, ShoppingCart, Package, RotateCcw, Clock,
   Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Download,
@@ -36,6 +37,8 @@ import {
   suppliers,
   agents,
   inventory,
+  payments,
+  type RetailerPayStatus,
 } from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadCSV } from "@/lib/csv";
@@ -67,6 +70,13 @@ const getGrossProfit = (sl: Sale): number => sl.revenue - getImportCostForSale(s
 const deliveryBadge: Record<DeliveryStatus, { label: string; cls: string }> = {
   pending: { label: "Pending", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
   delivered: { label: "Delivered", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  refunded: { label: "Refunded", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+};
+
+const retailerPayBadge: Record<RetailerPayStatus, { label: string; cls: string }> = {
+  unsold: { label: "Unsold", cls: "bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-300" },
+  pending: { label: "Pending", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+  sold: { label: "Sold", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
   refunded: { label: "Refunded", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
 };
 
@@ -109,6 +119,7 @@ const emptyForm = {
 export default function SalesPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "editor";
+  const navigate = useNavigate();
 
   const [sales, setSales] = useState<Sale[]>(mockSales);
   const [search, setSearch] = useState("");
@@ -208,12 +219,25 @@ export default function SalesPage() {
     let list = [...visibleSales];
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(
-        (sl) =>
-          sl.id.toLowerCase().includes(q) ||
-          sl.productName.toLowerCase().includes(q) ||
-          sl.productType.toLowerCase().includes(q),
-      );
+      list = list.filter((sl) => {
+        const payment = payments.find(p => p.type === "retailer" && p.linkedId === sl.id);
+        const payStatus = payment ? retailerPayBadge[payment.status as RetailerPayStatus].label : "N/A";
+        const fields = [
+          sl.id,
+          getRetailerName(sl.retailerId),
+          sl.productType,
+          sl.productName,
+          String(sl.quantity),
+          String(sl.sellingPrice),
+          String(sl.revenue),
+          String(getGrossProfit(sl)),
+          deliveryBadge[sl.deliveryStatus].label,
+          payStatus,
+          String(sl.warrantyDays ?? 0),
+          sl.saleDate,
+        ];
+        return fields.some((f) => f.toLowerCase().includes(q));
+      });
     }
     if (deliveryFilter !== "all") list = list.filter((sl) => sl.deliveryStatus === deliveryFilter);
     if (retailerFilter !== "all") list = list.filter((sl) => sl.retailerId === retailerFilter);
@@ -339,8 +363,8 @@ export default function SalesPage() {
                     m.label === "Pending"
                       ? "text-amber-500"
                       : m.label === "Refunded"
-                      ? "text-red-500"
-                      : "text-muted-foreground",
+                        ? "text-red-500"
+                        : "text-muted-foreground",
                   )}
                 >
                   {m.sub}
@@ -540,7 +564,7 @@ export default function SalesPage() {
             <CardTitle className="text-lg">Sales</CardTitle>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => {
-                const headers = ["Sale ID", "Retailer", "Product Type", "Product Name", "Qty", "Selling Price", "Wholesale Price", "Revenue", "Gross Profit", "Delivery", "Warranty (days)", "Sale Date"];
+                const headers = ["Sale ID", "Retailer", "Product Type", "Product Name", "Qty", "Selling Price", "Revenue", "Gross Profit", "Delivery", "Payment", "Warranty (days)", "Sale Date"];
                 const rows = filtered.map((sl) => [
                   sl.id,
                   getRetailerName(sl.retailerId),
@@ -552,6 +576,7 @@ export default function SalesPage() {
                   String(sl.revenue),
                   String(getGrossProfit(sl)),
                   sl.deliveryStatus,
+                  payments.find(p => p.type === "retailer" && p.linkedId === sl.id)?.status || "N/A",
                   String(sl.warrantyDays ?? 0),
                   sl.saleDate,
                 ]);
@@ -618,23 +643,24 @@ export default function SalesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[170px] cursor-pointer select-none" onClick={() => toggleSort("id")}>
+                  <TableHead className="w-[150px] cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("id")}>
                     <span className="flex items-center">Sale ID <SortIcon field="id" /></span>
                   </TableHead>
-                  <TableHead>Retailer</TableHead>
-                  <TableHead>Product Type</TableHead>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Qty</TableHead>
-                  <TableHead className="text-right">Selling Price</TableHead>
-                  <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("revenue")}>
+                  <TableHead className="whitespace-nowrap">Retailer</TableHead>
+                  <TableHead className="whitespace-nowrap">Product Type</TableHead>
+                  <TableHead className="whitespace-nowrap">Product Name</TableHead>
+                  <TableHead className="whitespace-nowrap">Qty</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Selling Price</TableHead>
+                  <TableHead className="cursor-pointer select-none text-right whitespace-nowrap" onClick={() => toggleSort("revenue")}>
                     <span className="flex items-center justify-end">Revenue <SortIcon field="revenue" /></span>
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("grossProfit")}>
+                  <TableHead className="cursor-pointer select-none text-right whitespace-nowrap" onClick={() => toggleSort("grossProfit")}>
                     <span className="flex items-center justify-end">Gross Profit <SortIcon field="grossProfit" /></span>
                   </TableHead>
-                  <TableHead>Delivery</TableHead>
-                  <TableHead className="text-right">Warranty (days)</TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("saleDate")}>
+                  <TableHead className="whitespace-nowrap w-[110px]">Delivery</TableHead>
+                  <TableHead className="whitespace-nowrap w-[110px]">Payment</TableHead>
+                  <TableHead className="text-right whitespace-nowrap w-[130px]">Warranty (days)</TableHead>
+                  <TableHead className="cursor-pointer select-none whitespace-nowrap w-[120px]" onClick={() => toggleSort("saleDate")}>
                     <span className="flex items-center">Sale Date <SortIcon field="saleDate" /></span>
                   </TableHead>
                   {canEdit && <TableHead className="w-10" />}
@@ -654,7 +680,7 @@ export default function SalesPage() {
                     const grossProfit = getGrossProfit(sl);
                     return (
                       <TableRow key={sl.id} className={canEdit ? "group" : undefined}>
-                        <TableCell className="font-mono text-xs font-medium w-[170px]">{sl.id}</TableCell>
+                        <TableCell className="font-mono text-xs font-medium w-[150px]">{sl.id}</TableCell>
                         <TableCell className="text-sm">{getRetailerName(sl.retailerId)}</TableCell>
                         <TableCell className="text-sm font-medium">{sl.productType}</TableCell>
                         <TableCell className="text-sm font-medium">{sl.productName}</TableCell>
@@ -662,8 +688,16 @@ export default function SalesPage() {
                         <TableCell className="text-sm text-right">{formatCurrency(sl.sellingPrice)}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{formatCurrency(sl.revenue)}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{formatCurrency(grossProfit)}</TableCell>
-                    <TableCell><Badge variant="outline" className={db.cls}>{db.label}</Badge></TableCell>
-                    <TableCell className="text-sm text-right text-muted-foreground">{sl.warrantyDays ?? 0}</TableCell>
+                        <TableCell><Badge variant="outline" className={db.cls}>{db.label}</Badge></TableCell>
+                        <TableCell>
+                          {(() => {
+                            const payment = payments.find(p => p.type === "retailer" && p.linkedId === sl.id);
+                            if (!payment) return <span className="text-xs text-muted-foreground">—</span>;
+                            const pb = retailerPayBadge[payment.status as RetailerPayStatus];
+                            return <Badge variant="outline" className={pb.cls}>{pb.label}</Badge>;
+                          })()}
+                        </TableCell>
+                        <TableCell className="text-sm text-right text-muted-foreground">{sl.warrantyDays ?? 0}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{sl.saleDate}</TableCell>
                         {canEdit && (
                           <TableCell className="text-right align-middle">
@@ -683,9 +717,9 @@ export default function SalesPage() {
                                         productType: sl.productType,
                                         quantity: String(sl.quantity),
                                         sellingPrice: String(sl.sellingPrice),
-                                      wholesalePrice: String(sl.wholesalePrice),
-                                      deliveryFee: "0",
-                                      warrantyDays: String(sl.warrantyDays ?? 30),
+                                        wholesalePrice: String(sl.wholesalePrice),
+                                        deliveryFee: "0",
+                                        warrantyDays: String(sl.warrantyDays ?? 30),
                                         saleDate: sl.saleDate,
                                         deliveryStatus: sl.deliveryStatus,
                                       });
@@ -846,13 +880,59 @@ export default function SalesPage() {
               <Input value={form.saleId} disabled />
             </div>
             <div className="space-y-1.5">
-              <Label>Retailer</Label>
-              <Select value={form.retailerId} onValueChange={(v) => setForm((f) => ({ ...f, retailerId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select retailer" /></SelectTrigger>
-                <SelectContent>
-                  {retailers.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="flex items-center justify-between">
+                <span>Retailer</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  disabled={!form.retailerId}
+                  onClick={() => {
+                    if (!form.retailerId) return;
+                    setDialogOpen(false);
+                    navigate("/settings", { state: { highlightRetailerId: form.retailerId, activeTab: "retailers" } });
+                  }}
+                >
+                  View in Settings
+                </Button>
+              </Label>
+              <div className="relative">
+                <Input
+                  value={
+                    retailers.find((r) => r.id === form.retailerId)?.name ||
+                    (form.retailerId ? form.retailerId : "")
+                  }
+                  onChange={(e) => setForm((f) => ({ ...f, retailerId: e.target.value }))}
+                  placeholder="Search retailer name..."
+                  autoComplete="off"
+                />
+                {form.retailerId && (() => {
+                  const q = form.retailerId.toLowerCase();
+                  const currentName = retailers.find(r => r.id === form.retailerId)?.name?.toLowerCase() || "";
+                  // Don't show dropdown if the input exactly matches the selected retailer's name or ID
+                  if (q === currentName || retailers.some(r => r.id.toLowerCase() === q)) return null;
+
+                  const matches = retailers
+                    .filter((r) => r.name.toLowerCase().includes(q))
+                    .slice(0, 8);
+                  if (matches.length === 0) return null;
+                  return (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover shadow-md max-h-[180px] overflow-y-auto">
+                      {matches.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center"
+                          onClick={() => setForm((f) => ({ ...f, retailerId: r.id }))}
+                        >
+                          <span className="text-sm">{r.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -890,12 +970,11 @@ export default function SalesPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Wholesale Price (₱)</Label>
+                <Label>Revenue (₱)</Label>
                 <Input
-                  type="number"
-                  min="0"
-                  value={form.wholesalePrice}
-                  onChange={(e) => setForm((f) => ({ ...f, wholesalePrice: e.target.value }))}
+                  type="text"
+                  disabled
+                  value={formatCurrency((Number(form.quantity) || 0) * (Number(form.sellingPrice) || 0))}
                 />
               </div>
               <div className="space-y-1.5">
@@ -914,20 +993,6 @@ export default function SalesPage() {
                     <SelectItem value="90">90</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-            <div className="rounded-md bg-muted p-3 grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Revenue</p>
-                <p className="text-sm font-bold">{formatCurrency(formCalc.revenue)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Gross Profit</p>
-                <p className="text-sm font-bold">{formatCurrency(formCalc.grossProfit)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Margin</p>
-                <p className="text-sm font-bold">{formCalc.margin}%</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

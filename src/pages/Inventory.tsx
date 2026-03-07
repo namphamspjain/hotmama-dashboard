@@ -50,7 +50,6 @@ import {
 } from "recharts";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  inventory as mockInventory,
   InventoryItem,
   InventoryStatus,
   orders,
@@ -58,6 +57,7 @@ import {
 } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useInventory } from "@/contexts/InventoryContext";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { downloadCSV } from "@/lib/csv";
@@ -103,7 +103,7 @@ export default function InventoryPage() {
   const canEdit = user?.role === "admin" || user?.role === "editor";
   const navigate = useNavigate();
 
-  const [items, setItems] = useState<InventoryItem[]>(mockInventory);
+  const { items, setItems, costOfLossTotal } = useInventory();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -140,26 +140,11 @@ export default function InventoryPage() {
   // metrics
   const metrics = useMemo(() => {
     const good = visibleItems.filter((i) => i.status === "good").length;
-    const damagedItems = visibleItems.filter((i) => i.status === "damaged");
-    const lostItems = visibleItems.filter((i) => i.status === "lost");
-    const damaged = damagedItems.length;
-    const lost = lostItems.length;
+    const damaged = visibleItems.filter((i) => i.status === "damaged").length;
+    const lost = visibleItems.filter((i) => i.status === "lost").length;
     const total = good + damaged;
 
-    // Cost of Loss: sum unit cost of all damaged/lost units within visible range
-    const unitMap: Record<string, number> = {};
-    orders.forEach((o) => {
-      if (o.quantity > 0) {
-        unitMap[o.id] = Math.round(o.importCostPhp / o.quantity);
-      }
-    });
-    const costOfLoss = [...damagedItems, ...lostItems].reduce((sum, item) => {
-      const unit = unitMap[item.orderId];
-      if (!unit) return sum;
-      return sum + unit;
-    }, 0);
-
-    return { total, good, damaged, lost, costOfLoss };
+    return { total, good, damaged, lost };
   }, [visibleItems]);
 
   // chart data
@@ -199,9 +184,9 @@ export default function InventoryPage() {
   const orderCostMap = useMemo(() => {
     const map: Record<string, number> = {};
     orders.forEach((o) => {
-      if (o.quantity > 0) {
-        map[o.id] = Math.round(o.importCostPhp / o.quantity);
-      }
+      const unitPricePhp = o.importUnitPriceYuan * o.exchangeRate;
+      const importCostPhpPerItem = o.importCostPhp;
+      map[o.id] = Math.round(unitPricePhp + importCostPhpPerItem);
     });
     return map;
   }, []);
@@ -230,7 +215,18 @@ export default function InventoryPage() {
     let list = [...visibleItems];
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter((i) => i.id.toLowerCase().includes(q) || i.productName.toLowerCase().includes(q));
+      list = list.filter((i) => {
+        const fields = [
+          i.id,
+          i.productType,
+          i.productName,
+          statusConfig[i.status].label,
+          i.orderId,
+          i.receivalDate,
+          i.notes ?? "",
+        ];
+        return fields.some((f) => f.toLowerCase().includes(q));
+      });
     }
     if (statusFilter !== "all") list = list.filter((i) => i.status === statusFilter);
     if (typeFilter !== "all") list = list.filter((i) => i.productType === typeFilter);
@@ -322,7 +318,7 @@ export default function InventoryPage() {
     { label: "Good", value: metrics.good, icon: CheckCircle2 },
     { label: "Damaged", value: metrics.damaged, icon: AlertTriangle },
     { label: "Lost", value: metrics.lost, icon: XCircle },
-    { label: "Cost of Loss", value: formatCurrency(metrics.costOfLoss), icon: XCircle },
+    { label: "Cost of Loss", value: formatCurrency(costOfLossTotal), icon: XCircle },
   ];
 
   return (

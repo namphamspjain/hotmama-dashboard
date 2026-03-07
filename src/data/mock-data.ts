@@ -102,21 +102,20 @@ export interface Payment {
 }
 
 export const payments: Payment[] = [
-  { id: "PAY-001", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260110-001", amount: 5000, status: "paid", dueDate: "2026-01-25", paidDate: "2026-01-24" },
-  { id: "PAY-002", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260115-002", amount: 1077, status: "paid", dueDate: "2026-01-29", paidDate: "2026-01-28" },
-  { id: "PAY-003", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260201-003", amount: 1635, status: "unpaid", dueDate: "2026-02-15" },
-  { id: "PAY-004", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260105-006", amount: 1190, status: "overdue", dueDate: "2026-01-19" },
-  { id: "PAY-005", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260201-005", amount: 216000, status: "sold", dueDate: "2026-02-01", paidDate: "2026-01-31" },
-  { id: "PAY-006", type: "retailer", partnerName: "iGadget Store", linkedId: "SL-20260128-002", amount: 76000, status: "sold", dueDate: "2026-02-04", paidDate: "2026-02-03" },
-  { id: "PAY-007", type: "retailer", partnerName: "Apple Corner MNL", linkedId: "SL-20260212-003", amount: 85000, status: "pending", dueDate: "2026-02-26" },
-  { id: "PAY-008", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260205-004", amount: 90000, status: "refunded", dueDate: "2026-02-12" },
+  { id: "PAY-AG-20260125-001", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260110-001", amount: 5000, status: "paid", dueDate: "2026-01-25", paidDate: "2026-01-24" },
+  { id: "PAY-AG-20260129-002", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260115-002", amount: 1077, status: "paid", dueDate: "2026-01-29", paidDate: "2026-01-28" },
+  { id: "PAY-AG-20260215-003", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260201-003", amount: 1635, status: "unpaid", dueDate: "2026-02-15" },
+  { id: "PAY-AG-20260119-004", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260105-006", amount: 1190, status: "overdue", dueDate: "2026-01-19" },
+  { id: "PAY-RT-20260201-001", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260201-005", amount: 216000, status: "sold", dueDate: "2026-02-01", paidDate: "2026-01-31" },
+  { id: "PAY-RT-20260204-002", type: "retailer", partnerName: "iGadget Store", linkedId: "SL-20260128-002", amount: 76000, status: "sold", dueDate: "2026-02-04", paidDate: "2026-02-03" },
+  { id: "PAY-RT-20260226-003", type: "retailer", partnerName: "Apple Corner MNL", linkedId: "SL-20260212-003", amount: 85000, status: "pending", dueDate: "2026-02-26" },
+  { id: "PAY-RT-20260212-004", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260205-004", amount: 90000, status: "refunded", dueDate: "2026-02-12" },
 ];
 
 // ============ COSTS ============
 export type CostType =
+  | "Cost of Goods"
   | "Cost of Loss"
-  | "Shipping Fees"
-  | "Agent Fees"
   | "Salary"
   | "Housing Rental"
   | "Miscellaneous";
@@ -137,20 +136,6 @@ export const costs: CostItem[] = [
     note: "Damaged units from January shipments",
     amount: 15000,
     costDate: "2026-01-10",
-  },
-  {
-    id: "C-20260131-0001",
-    type: "Shipping Fees",
-    note: "Consolidated import shipping fees (Jan)",
-    amount: 13600,
-    costDate: "2026-01-31",
-  },
-  {
-    id: "C-20260131-0002",
-    type: "Agent Fees",
-    note: "Commissions for logistics agents (Jan)",
-    amount: 14825,
-    costDate: "2026-01-31",
   },
   {
     id: "C-20260201-0001",
