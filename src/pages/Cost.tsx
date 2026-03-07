@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DollarSign,
   PieChart as PieIcon,
@@ -11,6 +11,10 @@ import {
   Download,
   Pencil,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,14 +89,14 @@ function getNextCostId(costs: CostItem[], costDate: string): string {
   const dateKey = costDate.replace(/-/g, "");
   let max = 0;
   costs.forEach((c) => {
-    const match = c.id.match(/^C-(\d{8})-(\d{4})$/);
+    const match = c.id.match(/^C-(\d{8})-(\d{3,})$/);
     if (match && match[1] === dateKey) {
       const n = parseInt(match[2], 10);
       if (n > max) max = n;
     }
   });
   const next = max + 1;
-  return `C-${dateKey}-${String(next).padStart(4, "0")}`;
+  return `C-${dateKey}-${String(next).padStart(3, "0")}`;
 }
 
 export default function CostPage() {
@@ -108,6 +112,10 @@ export default function CostPage() {
   });
   const [sortField, setSortField] = useState<SortField>("costDate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<typeof emptyForm>(emptyForm);
   const [editingCost, setEditingCost] = useState<CostItem | null>(null);
@@ -191,6 +199,16 @@ export default function CostPage() {
     return list;
   }, [visibleCosts, search, typeFilter, sortField, sortDir]);
 
+  // Reset page when filters or rowsPerPage change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, typeFilter, rowsPerPage, dateRange.from, dateRange.to]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedRows = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
@@ -208,9 +226,19 @@ export default function CostPage() {
     );
   };
 
+  // Keep Cost ID in sync with cost date for new items
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (editingCost) return;
+    if (!form.costDate) return;
+    const nextId = getNextCostId(costs, form.costDate);
+    if (form.id === nextId) return;
+    setForm((prev) => ({ ...prev, id: nextId }));
+  }, [dialogOpen, editingCost, form.costDate, costs]);
+
   const handleSubmit = () => {
     if (!form.type || !form.amount || !form.costDate) return;
-    const id = editingCost?.id ?? getNextCostId(costs, form.costDate);
+    const id = editingCost?.id ?? form.id;
     const amount = parseFloat(form.amount) || 0;
     const next: CostItem = {
       id,
@@ -442,7 +470,7 @@ export default function CostPage() {
                     setEditingCost(null);
                     setForm({
                       ...emptyForm,
-                      id: "",
+                      id: getNextCostId(costs, emptyForm.costDate),
                     });
                     setDialogOpen(true);
                   }}
@@ -529,7 +557,7 @@ export default function CostPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((c) => (
+                  paginatedRows.map((c) => (
                     <TableRow key={c.id} className={canEdit ? "group" : undefined}>
                       <TableCell className="font-mono text-xs font-medium w-[180px] whitespace-nowrap">
                         {c.id}
@@ -600,9 +628,97 @@ export default function CostPage() {
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {filtered.length} of {costs.length} costs
-          </p>
+
+          {/* Pagination footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            {/* Left: rows info */}
+            <p className="text-xs text-muted-foreground">
+              Showing {filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1}–{Math.min(safePage * rowsPerPage, filtered.length)} of {filtered.length} costs
+            </p>
+
+            {/* Center: page navigation */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage(1)}
+                aria-label="First page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <span className="flex items-center gap-1.5 px-2 text-sm font-medium">
+                Page
+                <Input
+                  className="h-8 w-12 text-center text-sm px-1"
+                  value={safePage}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(val) && val >= 1 && val <= totalPages) {
+                      setCurrentPage(val);
+                    }
+                  }}
+                  min={1}
+                  max={totalPages}
+                  type="number"
+                />
+                <span className="text-muted-foreground">of {totalPages}</span>
+              </span>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="Last page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Right: rows per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(v) => setRowsPerPage(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px] text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -613,7 +729,10 @@ export default function CostPage() {
           setDialogOpen(open);
           if (!open) {
             setEditingCost(null);
-            setForm(emptyForm);
+            setForm({
+              ...emptyForm,
+              id: getNextCostId(costs, emptyForm.costDate),
+            });
           }
         }}
       >
@@ -630,7 +749,7 @@ export default function CostPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Cost ID</Label>
-                <Input value={editingCost?.id ?? "Auto"} disabled />
+                <Input value={form.id} disabled />
               </div>
               <div className="space-y-1.5">
                 <Label>Cost Type</Label>

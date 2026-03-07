@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Package,
@@ -13,6 +13,10 @@ import {
   Trash2,
   Download,
   Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,6 +109,10 @@ export default function InventoryPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
     to: null,
@@ -235,6 +243,16 @@ export default function InventoryPage() {
     });
     return list;
   }, [visibleItems, search, statusFilter, typeFilter, sortField, sortDir]);
+
+  // Reset page when filters or rowsPerPage change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, typeFilter, rowsPerPage, dateRange.from, dateRange.to]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedRows = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -626,7 +644,7 @@ export default function InventoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((item) => {
+                  paginatedRows.map((item) => {
                     const sc = statusConfig[item.status];
                     return (
                       <TableRow key={item.id} className={canEdit ? "group" : undefined}>
@@ -694,7 +712,97 @@ export default function InventoryPage() {
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground">{filtered.length} of {items.length} items</p>
+
+          {/* Pagination footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            {/* Left: rows info */}
+            <p className="text-xs text-muted-foreground">
+              Showing {filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1}–{Math.min(safePage * rowsPerPage, filtered.length)} of {filtered.length} items
+            </p>
+
+            {/* Center: page navigation */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage(1)}
+                aria-label="First page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <span className="flex items-center gap-1.5 px-2 text-sm font-medium">
+                Page
+                <Input
+                  className="h-8 w-12 text-center text-sm px-1"
+                  value={safePage}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(val) && val >= 1 && val <= totalPages) {
+                      setCurrentPage(val);
+                    }
+                  }}
+                  min={1}
+                  max={totalPages}
+                  type="number"
+                />
+                <span className="text-muted-foreground">of {totalPages}</span>
+              </span>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="Last page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Right: rows per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(v) => setRowsPerPage(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px] text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -738,17 +846,44 @@ export default function InventoryPage() {
                     disabled={!form.orderId}
                     onClick={() => {
                       if (!form.orderId) return;
+                      setDialogOpen(false);
                       navigate("/orders", { state: { highlightOrderId: form.orderId } });
                     }}
                   >
                     View in Orders
                   </Button>
                 </Label>
-                <Input
-                  value={form.orderId}
-                  onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
-                  placeholder="e.g. OD-20260110-001"
-                />
+                <div className="relative">
+                  <Input
+                    value={form.orderId}
+                    onChange={(e) => setForm((f) => ({ ...f, orderId: e.target.value }))}
+                    placeholder="Search order ID..."
+                    autoComplete="off"
+                  />
+                  {form.orderId && (() => {
+                    const q = form.orderId.toLowerCase();
+                    const matches = orders
+                      .filter((o) => o.id.toLowerCase().includes(q))
+                      .slice(0, 8);
+                    const exactMatch = orders.some((o) => o.id === form.orderId);
+                    if (matches.length === 0 || exactMatch) return null;
+                    return (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover shadow-md max-h-[180px] overflow-y-auto">
+                        {matches.map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between"
+                            onClick={() => setForm((f) => ({ ...f, orderId: o.id }))}
+                          >
+                            <span className="font-mono text-xs">{o.id}</span>
+                            <span className="text-xs text-muted-foreground truncate ml-2">{o.productName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
 

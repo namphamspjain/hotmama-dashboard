@@ -177,7 +177,7 @@ export const costs: CostItem[] = [
 
 // ============ USERS ============
 export interface MockUser {
-  id: string; name: string; email: string; password?: string; role: "admin" | "editor" | "viewer"; active: boolean;
+  id: string; name: string; email: string; password?: string; role: "admin" | "editor" | "viewer"; active: boolean; avatar?: string;
 }
 
 export const mockUsers: MockUser[] = [
@@ -191,8 +191,10 @@ export function formatCurrency(amount: number): string {
   return `₱${amount.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-export function getOverduePaymentsCount(): number {
-  return payments.filter((p) => p.status === "overdue").length;
+export function getPendingPaymentsCount(): number {
+  return payments.filter(
+    (p) => (p.type === "retailer" && p.status === "pending") || (p.type === "agent" && p.status === "unpaid")
+  ).length;
 }
 
 export function getSupplierName(id: string): string {

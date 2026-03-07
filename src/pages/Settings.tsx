@@ -28,7 +28,7 @@ function isRetailerReferenced(id: string) { return sales.some(s => s.retailerId 
 // ============ Component ============
 
 const SettingsPage = () => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const isAdmin = user?.role === "admin";
   const canEdit = user?.role === "admin" || user?.role === "editor";
 
@@ -50,6 +50,15 @@ const SettingsPage = () => {
   const [form, setForm] = useState<Record<string, any>>({});
 
   const updateForm = (key: string, val: any) => setForm(prev => ({ ...prev, [key]: val }));
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => updateForm("avatar", reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
 
   // ============ Supplier CRUD ============
   const openSupplierDialog = (mode: "add" | "edit", item?: Supplier) => {
@@ -124,6 +133,11 @@ const SettingsPage = () => {
     if (!dialog) return;
     if (dialog.mode === "add") setUserList(prev => [...prev, form as MockUser]);
     else setUserList(prev => prev.map(u => u.id === form.id ? form as MockUser : u));
+    
+    if (user && form.id === String(user.id)) {
+      updateProfile({ name: form.name, avatar: form.avatar });
+    }
+    
     setDialog(null);
   };
   const deleteUser = (id: string) => {
@@ -175,6 +189,28 @@ const SettingsPage = () => {
 
   const renderUserFields = () => (
     <div className="grid gap-3">
+      <div className="flex flex-col items-center gap-2 mb-2">
+        <label className="group relative flex h-20 w-20 cursor-pointer items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/50 bg-muted overflow-hidden hover:bg-muted/80 transition-colors">
+          {form.avatar ? (
+            <>
+              <img src={form.avatar} alt="Avatar preview" className="h-full w-full object-cover" />
+              <div
+                className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                onClick={(e) => {
+                  e.preventDefault();
+                  updateForm("avatar", null);
+                }}
+              >
+                <Trash2 className="h-5 w-5 text-white" />
+              </div>
+            </>
+          ) : (
+            <Plus className="h-6 w-6 text-muted-foreground" />
+          )}
+          <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+        </label>
+        <span className="text-xs text-muted-foreground">Upload Photo</span>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Name</Label><Input value={form.name ?? ""} onChange={e => updateForm("name", e.target.value)} /></div>
         <div><Label>Username</Label><Input type="text" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
@@ -582,13 +618,22 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
+                  <TableHead className="w-16">Photo</TableHead><TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredUsers.map(u => {
                     const isVisible = visiblePasswords[u.id];
                     return (
                       <TableRow key={u.id} className={isAdmin ? "group" : undefined}>
+                        <TableCell>
+                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted flex items-center justify-center">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="text-xs font-medium text-muted-foreground">{u.name.charAt(0)}</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email}</TableCell>
                         <TableCell>

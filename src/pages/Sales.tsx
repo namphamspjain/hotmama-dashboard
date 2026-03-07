@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   DollarSign, TrendingUp, ShoppingCart, Package, RotateCcw, Clock,
   Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Download,
   Pencil, Trash2,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,22 @@ const SALARY_COST = 0;
 const HOUSING_RENTAL_COST = 0;
 const MISCELLANEOUS_COST = 0;
 
+const getNextSaleId = (salesList: Sale[], saleDate: string): string => {
+  const dateKey = saleDate.replace(/-/g, "");
+  let max = 0;
+  salesList.forEach((s) => {
+    const match = s.id.match(/^SL-(\d{8})-(\d{3})$/);
+    if (match && match[1] === dateKey) {
+      const n = parseInt(match[2], 10);
+      if (n > max) max = n;
+    }
+  });
+  const next = max + 1;
+  return `SL-${dateKey}-${String(next).padStart(3, "0")}`;
+};
+
 const emptyForm = {
+  saleId: "",
   retailerId: "", productName: "", productType: "", quantity: "1",
   sellingPrice: "", wholesalePrice: "", deliveryFee: "0",
   warrantyDays: "30",
@@ -102,6 +118,10 @@ export default function SalesPage() {
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({ from: null, to: null });
   const [sortField, setSortField] = useState<SortField>("saleDate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -210,6 +230,16 @@ export default function SalesPage() {
     return list;
   }, [visibleSales, search, deliveryFilter, retailerFilter, typeFilter, sortField, sortDir]);
 
+  // Reset page when filters or rowsPerPage change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, deliveryFilter, retailerFilter, typeFilter, rowsPerPage, dateRange.from, dateRange.to]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedRows = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortField(field); setSortDir("asc"); }
@@ -230,10 +260,19 @@ export default function SalesPage() {
     return { revenue, importCost, grossProfit, margin };
   }, [form]);
 
+  // Keep Sale ID in sync with sale date for new sales
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (editingSale) return;
+    if (!form.saleDate) return;
+    const nextId = getNextSaleId(sales, form.saleDate);
+    if (form.saleId === nextId) return;
+    setForm((prev) => ({ ...prev, saleId: nextId }));
+  }, [dialogOpen, editingSale, form.saleDate, sales]);
+
   const handleSubmit = () => {
     if (!form.retailerId || !form.productName || !form.quantity || !form.sellingPrice) return;
-    const dateStr = form.saleDate.replace(/-/g, "");
-    const id = editingSale?.id ?? `SL-${dateStr}-${String(sales.length + 1).padStart(3, "0")}`;
+    const id = editingSale?.id ?? form.saleId;
     const sale: Sale = {
       id,
       retailerId: form.retailerId,
@@ -525,7 +564,10 @@ export default function SalesPage() {
                   size="sm"
                   onClick={() => {
                     setEditingSale(null);
-                    setForm(emptyForm);
+                    setForm({
+                      ...emptyForm,
+                      saleId: getNextSaleId(sales, emptyForm.saleDate),
+                    });
                     setDialogOpen(true);
                   }}
                 >
@@ -607,7 +649,7 @@ export default function SalesPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((sl) => {
+                  paginatedRows.map((sl) => {
                     const db = deliveryBadge[sl.deliveryStatus];
                     const grossProfit = getGrossProfit(sl);
                     return (
@@ -635,6 +677,7 @@ export default function SalesPage() {
                                     onClick={() => {
                                       setEditingSale(sl);
                                       setForm({
+                                        saleId: sl.id,
                                         retailerId: sl.retailerId,
                                         productName: sl.productName,
                                         productType: sl.productType,
@@ -681,7 +724,97 @@ export default function SalesPage() {
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground">{filtered.length} of {sales.length} sales</p>
+
+          {/* Pagination footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            {/* Left: rows info */}
+            <p className="text-xs text-muted-foreground">
+              Showing {filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1}–{Math.min(safePage * rowsPerPage, filtered.length)} of {filtered.length} sales
+            </p>
+
+            {/* Center: page navigation */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage(1)}
+                aria-label="First page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <span className="flex items-center gap-1.5 px-2 text-sm font-medium">
+                Page
+                <Input
+                  className="h-8 w-12 text-center text-sm px-1"
+                  value={safePage}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(val) && val >= 1 && val <= totalPages) {
+                      setCurrentPage(val);
+                    }
+                  }}
+                  min={1}
+                  max={totalPages}
+                  type="number"
+                />
+                <span className="text-muted-foreground">of {totalPages}</span>
+              </span>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="Last page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Right: rows per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(v) => setRowsPerPage(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px] text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -689,17 +822,29 @@ export default function SalesPage() {
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) setEditingSale(null);
+          if (!open) {
+            setEditingSale(null);
+            setForm({
+              ...emptyForm,
+              saleId: getNextSaleId(sales, emptyForm.saleDate),
+            });
+          }
         }}
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingSale ? "Edit Sale" : "New Sale"}</DialogTitle>
             <DialogDescription>
-              {editingSale ? editingSale.productName : "Fill in sale details. Margin is calculated in real-time."}
+              {editingSale
+                ? editingSale.productName
+                : "Fill in sale details. Sale ID is generated automatically."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Sale ID</Label>
+              <Input value={form.saleId} disabled />
+            </div>
             <div className="space-y-1.5">
               <Label>Retailer</Label>
               <Select value={form.retailerId} onValueChange={(v) => setForm((f) => ({ ...f, retailerId: v }))}>

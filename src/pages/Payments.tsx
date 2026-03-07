@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +23,7 @@ import {
   formatCurrency,
 } from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowUpDown, Search, AlertTriangle, CheckCircle2, Clock, DollarSign, Download, Pencil, Trash2, Plus } from "lucide-react";
+import { ArrowUpDown, Search, AlertTriangle, CheckCircle2, Clock, DollarSign, Download, Pencil, Trash2, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   PieChart,
@@ -118,6 +118,16 @@ const PaymentsPage = () => {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [form, setForm] = useState(emptyForm);
+
+  // Pagination & Tabs state
+  const [activeTab, setActiveTab] = useState("agents");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Reset page
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, dateRange.from, dateRange.to, activeTab, rowsPerPage]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -275,8 +285,15 @@ const PaymentsPage = () => {
     </Button>
   );
 
-  const renderTable = (items: Payment[], type: "agent" | "retailer") => (
-    <Table>
+  const renderTable = (items: Payment[], type: "agent" | "retailer") => {
+    const totalPages = Math.max(1, Math.ceil(items.length / rowsPerPage));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginatedRows = items.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-md border">
+          <Table>
       <TableHeader>
         <TableRow>
           <TableHead className="w-[120px]"><SortHeader label="Pay ID" k="id" /></TableHead>
@@ -301,7 +318,7 @@ const PaymentsPage = () => {
               No payments found.
             </TableCell>
           </TableRow>
-        ) : items.map((p) => (
+        ) : paginatedRows.map((p) => (
           <TableRow
             key={p.id}
             className={cn(
@@ -359,7 +376,101 @@ const PaymentsPage = () => {
         ))}
       </TableBody>
     </Table>
-  );
+        </div>
+
+        {/* Pagination footer */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          {/* Left: rows info */}
+          <p className="text-xs text-muted-foreground">
+            Showing {items.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1}–{Math.min(safePage * rowsPerPage, items.length)} of {items.length} payments
+          </p>
+
+          {/* Center: page navigation */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage(1)}
+              aria-label="First page"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <span className="flex items-center gap-1.5 px-2 text-sm font-medium">
+              Page
+              <Input
+                className="h-8 w-12 text-center text-sm px-1"
+                value={safePage}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!Number.isNaN(val) && val >= 1 && val <= totalPages) {
+                    setCurrentPage(val);
+                  }
+                }}
+                min={1}
+                max={totalPages}
+                type="number"
+              />
+              <span className="text-muted-foreground">of {totalPages}</span>
+            </span>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              aria-label="Next page"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+              aria-label="Last page"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Right: rows per page selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
+            <Select
+              value={String(rowsPerPage)}
+              onValueChange={(v) => setRowsPerPage(Number(v))}
+            >
+              <SelectTrigger className="h-8 w-[70px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const metricCards = [
     { title: "Agent Fees Total", value: formatCurrency(metrics.agentTotal), icon: DollarSign },
@@ -602,7 +713,7 @@ const PaymentsPage = () => {
             </Select>
           </div>
 
-          <Tabs defaultValue="agents">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="agents" className="gap-1"><Clock className="h-3.5 w-3.5" /> Send to Agents</TabsTrigger>
               <TabsTrigger value="retailers" className="gap-1"><DollarSign className="h-3.5 w-3.5" /> Receive from Retailers</TabsTrigger>

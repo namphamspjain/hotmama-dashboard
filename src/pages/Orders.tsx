@@ -6,8 +6,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   DollarSign,
-  Truck,
-  Users,
   Plus,
   Search,
   ArrowUpDown,
@@ -17,6 +15,10 @@ import {
   Download,
   Trash2,
   Pencil,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
+import { CurrencyWidget } from "@/components/CurrencyWidget";
 
 type SortField = "id" | "orderDate" | "quantity" | "importCostPhp";
 type SortDir = "asc" | "desc";
@@ -66,7 +69,7 @@ const shippingBadge: Record<ShippingStatus, { label: string; cls: string }> = {
 const payBadge: Record<PayStatus, { label: string; cls: string }> = {
   paid: { label: "Paid", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
   unpaid: { label: "Unpaid", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-  overdue: { label: "Overdue", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  overdue: { label: "Canceled", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
 };
 
 const formatShortDate = (value?: string) => {
@@ -83,14 +86,29 @@ const formatYuan = (amount: number): string => {
   })}`;
 };
 
+const getNextOrderId = (ordersList: Order[], orderDate: string): string => {
+  const dateKey = orderDate.replace(/-/g, "");
+  let max = 0;
+  ordersList.forEach((o) => {
+    const match = o.id.match(/^OD-(\d{8})-(\d{3})$/);
+    if (match && match[1] === dateKey) {
+      const n = parseInt(match[2], 10);
+      if (n > max) max = n;
+    }
+  });
+  const next = max + 1;
+  return `OD-${dateKey}-${String(next).padStart(3, "0")}`;
+};
+
 const emptyForm = {
+  orderId: "",
   supplierId: "",
   agentId: "",
   productType: "",
   productName: "",
   quantity: "",
   importUnitPriceYuan: "",
-  importCostPhp: "",
+  importCostYuan: "",
   exchangeRate: "7.8",
   shippingFee: "",
   shippingStatus: "shipping" as ShippingStatus,
@@ -113,9 +131,11 @@ export default function OrdersPage() {
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({ from: null, to: null });
   const [sortField, setSortField] = useState<SortField>("orderDate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
-  const [rateLoading, setRateLoading] = useState(false);
-  const [rateError, setRateError] = useState<string | null>(null);
 
   // dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -140,15 +160,11 @@ export default function OrdersPage() {
   // metrics
   const metrics = useMemo(() => {
     const totalPurchased = visibleOrders.reduce((s, o) => s + o.quantity, 0);
-    const shipping = visibleOrders.filter((o) => o.shippingStatus === "shipping").length;
-    const received = visibleOrders.filter((o) => o.shippingStatus === "received").length;
+    const shipping = visibleOrders.reduce((s, o) => s + (o.shippingStatus === "shipping" ? o.quantity : 0), 0);
+    const received = visibleOrders.reduce((s, o) => s + (o.shippingStatus === "received" ? o.quantity : 0), 0);
+    const totalUnitPrice = visibleOrders.reduce((s, o) => s + o.importUnitPriceYuan, 0);
     const totalImportCost = visibleOrders.reduce((s, o) => s + o.importCostPhp, 0);
-    const totalShippingFees = visibleOrders.reduce((s, o) => s + (o.shippingFee ?? 0), 0);
-    const totalAgentFees = visibleOrders.reduce((s, o) => {
-      const agt = agents.find((a) => a.id === o.agentId);
-      return s + (agt ? o.importCostPhp * (agt.feePercent / 100) : 0);
-    }, 0);
-    return { totalPurchased, shipping, received, totalImportCost, totalShippingFees, totalAgentFees };
+    return { totalPurchased, shipping, received, totalUnitPrice, totalImportCost };
   }, [visibleOrders]);
 
   const productTypes = useMemo(
@@ -161,12 +177,28 @@ export default function OrdersPage() {
     let list = [...visibleOrders];
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(
-        (o) =>
-          o.id.toLowerCase().includes(q) ||
-          o.productName.toLowerCase().includes(q) ||
-          o.productType.toLowerCase().includes(q)
-      );
+      list = list.filter((o) => {
+        const fields = [
+          o.id,
+          getSupplierName(o.supplierId),
+          getAgentName(o.agentId),
+          o.productType,
+          o.productName,
+          String(o.quantity),
+          String(o.importUnitPriceYuan),
+          formatYuan(o.importUnitPriceYuan),
+          formatCurrency(o.importUnitPriceYuan * o.exchangeRate),
+          String(o.importCostPhp),
+          formatCurrency(o.importCostPhp),
+          String(o.shippingFee ?? 0),
+          formatCurrency(o.shippingFee ?? 0),
+          shippingBadge[o.shippingStatus].label,
+          payBadge[o.payStatus].label,
+          o.orderDate,
+          o.receivalDate ?? "",
+        ];
+        return fields.some((f) => f.toLowerCase().includes(q));
+      });
     }
     if (shippingFilter !== "all") list = list.filter((o) => o.shippingStatus === shippingFilter);
     if (payFilter !== "all") list = list.filter((o) => o.payStatus === payFilter);
@@ -184,6 +216,16 @@ export default function OrdersPage() {
     return list;
   }, [visibleOrders, search, shippingFilter, payFilter, supplierFilter, productTypeFilter, sortField, sortDir]);
 
+  // Reset page when filters or rowsPerPage change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, shippingFilter, payFilter, supplierFilter, productTypeFilter, rowsPerPage, dateRange.from, dateRange.to]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedRows = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortField(field); setSortDir("asc"); }
@@ -194,13 +236,20 @@ export default function OrdersPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
+  // Keep Order ID in sync with order date for new orders
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (editingOrder) return;
+    if (!form.orderDate) return;
+    const nextId = getNextOrderId(orders, form.orderDate);
+    if (form.orderId === nextId) return;
+    setForm((prev) => ({ ...prev, orderId: nextId }));
+  }, [dialogOpen, editingOrder, form.orderDate, orders]);
+
   const handleSubmit = () => {
     if (!form.supplierId || !form.agentId || !form.productName || !form.quantity) return;
-    const dateStr = form.orderDate.replace(/-/g, "");
     const baseOrder: Order = {
-      id:
-        editingOrder?.id ??
-        `OD-${dateStr}-${String(orders.length + 1).padStart(3, "0")}`,
+      id: editingOrder?.id ?? form.orderId,
       supplierId: form.supplierId,
       agentId: form.agentId,
       productType: form.productType,
@@ -208,7 +257,7 @@ export default function OrdersPage() {
       quantity: parseInt(form.quantity),
       importUnitPriceYuan: parseFloat(form.importUnitPriceYuan),
       exchangeRate: parseFloat(form.exchangeRate),
-      importCostPhp: Math.round(parseFloat(form.importCostPhp) || 0),
+      importCostPhp: Math.round((parseFloat(form.importCostYuan) || 0) * (parseFloat(form.exchangeRate) || 0)),
       shippingFee: Math.round(parseFloat(form.shippingFee) || 0),
       shippingStatus: form.shippingStatus,
       payStatus: form.payStatus,
@@ -235,25 +284,24 @@ export default function OrdersPage() {
   };
 
   const metricCards = [
-    { label: "Total Purchased", value: metrics.totalPurchased.toString(), icon: Package, sub: "units" },
-    { label: "Shipping", value: metrics.shipping.toString(), icon: Ship, sub: "orders" },
-    { label: "Received", value: metrics.received.toString(), icon: CheckCircle2, sub: "orders" },
+    { label: "Total Purchased", value: metrics.totalPurchased.toString(), icon: Package, sub: "items" },
+    { label: "Shipping", value: metrics.shipping.toString(), icon: Ship, sub: "items" },
+    { label: "Received", value: metrics.received.toString(), icon: CheckCircle2, sub: "items" },
+    { label: "Unit Price", value: formatYuan(metrics.totalUnitPrice), icon: DollarSign },
     { label: "Import Cost", value: formatCurrency(metrics.totalImportCost), icon: DollarSign },
-    { label: "Shipping Fees", value: formatCurrency(metrics.totalShippingFees), icon: Truck },
-    { label: "Agent Fees", value: formatCurrency(Math.round(metrics.totalAgentFees)), icon: Users },
   ];
 
   const ordersTrendData = useMemo(() => {
-    const byDate = visibleOrders.reduce<Record<string, { orders: number; units: number }>>((acc, o) => {
+    const byDate = visibleOrders.reduce<Record<string, { orders: number; items: number }>>((acc, o) => {
       const key = o.orderDate;
-      if (!acc[key]) acc[key] = { orders: 0, units: 0 };
+      if (!acc[key]) acc[key] = { orders: 0, items: 0 };
       acc[key].orders += 1;
-      acc[key].units += o.quantity;
+      acc[key].items += o.quantity;
       return acc;
     }, {});
     return Object.entries(byDate)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, v]) => ({ date, orders: v.orders, units: v.units }));
+      .map(([date, v]) => ({ date, orders: v.orders, items: v.items }));
   }, [visibleOrders]);
 
   const importCostTrendData = useMemo(() => {
@@ -266,36 +314,6 @@ export default function OrdersPage() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, totalImportCost]) => ({ date, totalImportCost }));
   }, [visibleOrders]);
-
-  // Real-time FX: CNY -> PHP for exchange rate field in New Order dialog
-  const refreshExchangeRate = useMemo(
-    () => async () => {
-      try {
-        setRateLoading(true);
-        setRateError(null);
-        // Public, no-key FX API. Returns PHP per 1 CNY.
-        const res = await fetch("https://api.exchangerate.host/latest?base=CNY&symbols=PHP");
-        if (!res.ok) throw new Error("Failed to fetch rate");
-        const data = await res.json();
-        const phpPerCny = typeof data?.rates?.PHP === "number" ? data.rates.PHP : null;
-        if (!phpPerCny || phpPerCny <= 0) throw new Error("Invalid rate data");
-        const normalized = phpPerCny.toFixed(2);
-        setForm((prev) => ({ ...prev, exchangeRate: normalized }));
-      } catch (err) {
-        setRateError("Unable to refresh rate. Using last value.");
-      } finally {
-        setRateLoading(false);
-      }
-    },
-    [],
-  );
-
-  // Auto-refresh rate when opening the dialog
-  useEffect(() => {
-    if (dialogOpen) {
-      refreshExchangeRate();
-    }
-  }, [dialogOpen, refreshExchangeRate]);
 
   // Default Shipping Fee from selected supplier (only for new orders)
   useEffect(() => {
@@ -316,7 +334,7 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       {/* Metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {metricCards.map((m) => (
           <Card key={m.label}>
             <CardContent className="p-4">
@@ -340,8 +358,8 @@ export default function OrdersPage() {
                     m.label === "Shipping"
                       ? "text-amber-500"
                       : m.label === "Received"
-                      ? "text-emerald-500"
-                      : "text-muted-foreground",
+                        ? "text-emerald-500"
+                        : "text-muted-foreground",
                   )}
                 >
                   {m.sub}
@@ -448,14 +466,14 @@ export default function OrdersPage() {
                 <YAxis className="text-xs fill-muted-foreground" />
                 <RechartsTooltip
                   formatter={(value: number, name: string) =>
-                    name === "Units" ? value.toLocaleString() : value
+                    name === "Items" ? value.toLocaleString() : value
                   }
                   labelFormatter={(label: string) => `Date: ${label}`}
                 />
                 <Legend />
                 <Bar
-                  dataKey="units"
-                  name="Units"
+                  dataKey="items"
+                  name="Items"
                   fill="hsl(var(--info))"
                   radius={[4, 4, 0, 0]}
                 />
@@ -512,8 +530,8 @@ export default function OrdersPage() {
                     "Product Type",
                     "Product Name",
                     "Qty",
-                    "Unit Price (¥)",
-                    "Import Cost (PHP)",
+                    "Unit Price/ item (PHP)",
+                    "Import Cost/ item (PHP)",
                     "Shipping Fee (PHP)",
                     "Shipping",
                     "Payment",
@@ -522,7 +540,7 @@ export default function OrdersPage() {
                     "Notes",
                   ];
                   const rows = filtered.map((o) => {
-                    const unitPriceYuan = o.importUnitPriceYuan;
+                    const unitPricePhp = Math.round(o.importUnitPriceYuan * o.exchangeRate);
                     const importCost = o.importCostPhp;
                     return [
                       o.id,
@@ -531,7 +549,7 @@ export default function OrdersPage() {
                       o.productType,
                       o.productName,
                       String(o.quantity),
-                      String(unitPriceYuan),
+                      String(unitPricePhp),
                       String(importCost),
                       String(o.shippingFee ?? 0),
                       o.shippingStatus,
@@ -551,7 +569,10 @@ export default function OrdersPage() {
                   size="sm"
                   onClick={() => {
                     setEditingOrder(null);
-                    setForm(emptyForm);
+                    setForm({
+                      ...emptyForm,
+                      orderId: getNextOrderId(orders, emptyForm.orderDate),
+                    });
                     setDialogOpen(true);
                   }}
                 >
@@ -583,7 +604,7 @@ export default function OrdersPage() {
                 <SelectItem value="all">All Payment</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="unpaid">Unpaid</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="overdue">Canceled</SelectItem>
               </SelectContent>
             </Select>
             <Select value={supplierFilter} onValueChange={setSupplierFilter}>
@@ -614,157 +635,268 @@ export default function OrdersPage() {
           <div className="rounded-md border">
             <div>
               <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("id")}>
-                    <span className="flex items-center">Order ID <SortIcon field="id" /></span>
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap">Supplier</TableHead>
-                  <TableHead className="whitespace-nowrap">Product Type</TableHead>
-                  <TableHead className="whitespace-nowrap">Product Name</TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none whitespace-nowrap"
-                    onClick={() => toggleSort("quantity")}
-                  >
-                    <span className="flex items-center">Qty <SortIcon field="quantity" /></span>
-                  </TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Unit Price (¥)</TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none text-right whitespace-nowrap"
-                    onClick={() => toggleSort("importCostPhp")}
-                  >
-                    <span className="flex items-center justify-end">
-                      Import Cost <SortIcon field="importCostPhp" />
-                    </span>
-                  </TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Shipping Fee</TableHead>
-                  <TableHead className="whitespace-nowrap">Shipping</TableHead>
-                  <TableHead className="whitespace-nowrap">Payment</TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none whitespace-nowrap"
-                    onClick={() => toggleSort("orderDate")}
-                  >
-                    <span className="flex items-center">Order Date <SortIcon field="orderDate" /></span>
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap">Receival Date</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
-                      <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                      No orders found.
-                    </TableCell>
+                    <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => toggleSort("id")}>
+                      <span className="flex items-center">Order ID <SortIcon field="id" /></span>
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">Supplier</TableHead>
+                    <TableHead className="whitespace-nowrap">Product Type</TableHead>
+                    <TableHead className="whitespace-nowrap">Product Name</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => toggleSort("quantity")}
+                    >
+                      <span className="flex items-center">Qty <SortIcon field="quantity" /></span>
+                    </TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Unit Price/ item</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none text-right whitespace-nowrap"
+                      onClick={() => toggleSort("importCostPhp")}
+                    >
+                      <span className="flex items-center justify-end">
+                        Import Cost/ item <SortIcon field="importCostPhp" />
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Shipping Fee</TableHead>
+                    <TableHead className="whitespace-nowrap">Shipping</TableHead>
+                    <TableHead className="whitespace-nowrap">Payment</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => toggleSort("orderDate")}
+                    >
+                      <span className="flex items-center">Order Date <SortIcon field="orderDate" /></span>
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">Receival Date</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
-                ) : (
-                  filtered.map((o) => {
-                    const sb = shippingBadge[o.shippingStatus];
-                    const pb = payBadge[o.payStatus];
-                    const unitPriceYuan = o.importUnitPriceYuan;
-                    const importCost = o.importCostPhp;
-                    const receivalDisplay = formatShortDate(o.receivalDate);
-                    return (
-                      <TableRow
-                        key={o.id}
-                        ref={(el) => {
-                          if (el) rowRefs.current[o.id] = el;
-                        }}
-                        className="group"
-                      >
-                        <TableCell className="font-mono text-xs font-medium whitespace-nowrap">{o.id}</TableCell>
-                        <TableCell className="text-sm">{getSupplierName(o.supplierId)}</TableCell>
-                        <TableCell>
-                          <p className="text-sm font-medium">{o.productType}</p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm font-medium">{o.productName}</p>
-                        </TableCell>
-                        <TableCell className="text-sm">{o.quantity}</TableCell>
-                        <TableCell className="text-sm text-right">{formatYuan(unitPriceYuan)}</TableCell>
-                        <TableCell className="text-sm text-right font-medium">{formatCurrency(importCost)}</TableCell>
-                        <TableCell className="text-sm text-right font-medium">{formatCurrency(o.shippingFee ?? 0)}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={pb.cls}>{pb.label}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{o.orderDate}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{receivalDisplay}</TableCell>
-                        <TableCell className="text-right align-middle">
-                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
-                                  onClick={() => {
-                                    setEditingOrder(o);
-                                    setForm({
-                                      supplierId: o.supplierId,
-                                      agentId: o.agentId,
-                                      productType: o.productType,
-                                      productName: o.productName,
-                                      quantity: String(o.quantity),
-                                      importUnitPriceYuan: String(o.importUnitPriceYuan),
-                                      importCostPhp: String(o.importCostPhp),
-                                      exchangeRate: String(o.exchangeRate),
-                                      shippingFee: String(o.shippingFee ?? 0),
-                                      shippingStatus: o.shippingStatus,
-                                      payStatus: o.payStatus,
-                                      orderDate: o.orderDate,
-                                      receivalDate: o.receivalDate ?? "",
-                                    });
-                                    setDialogOpen(true);
-                                  }}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                <p className="text-xs">Edit</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => handleDeleteOrder(o.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                <p className="text-xs">Delete</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
+                        <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        No orders found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedRows.map((o) => {
+                      const sb = shippingBadge[o.shippingStatus];
+                      const pb = payBadge[o.payStatus];
+                      const unitPriceYuan = o.importUnitPriceYuan;
+                      const importCost = o.importCostPhp;
+                      const receivalDisplay = formatShortDate(o.receivalDate);
+                      return (
+                        <TableRow
+                          key={o.id}
+                          ref={(el) => {
+                            if (el) rowRefs.current[o.id] = el;
+                          }}
+                          className="group"
+                        >
+                          <TableCell className="font-mono text-xs font-medium whitespace-nowrap">{o.id}</TableCell>
+                          <TableCell className="text-sm">{getSupplierName(o.supplierId)}</TableCell>
+                          <TableCell>
+                            <p className="text-sm font-medium">{o.productType}</p>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-sm font-medium">{o.productName}</p>
+                          </TableCell>
+                          <TableCell className="text-sm">{o.quantity}</TableCell>
+                          <TableCell className="text-sm text-right">{formatCurrency(unitPriceYuan * o.exchangeRate)}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{formatCurrency(importCost)}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{formatCurrency(o.shippingFee ?? 0)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={sb.cls}>{sb.label}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={pb.cls}>{pb.label}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{o.orderDate}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{receivalDisplay}</TableCell>
+                          <TableCell className="text-right align-middle">
+                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                    onClick={() => {
+                                      setEditingOrder(o);
+                                      setForm({
+                                        orderId: o.id,
+                                        supplierId: o.supplierId,
+                                        agentId: o.agentId,
+                                        productType: o.productType,
+                                        productName: o.productName,
+                                        quantity: String(o.quantity),
+                                        importUnitPriceYuan: String(o.importUnitPriceYuan),
+                                        importCostYuan: o.exchangeRate ? String((o.importCostPhp / o.exchangeRate).toFixed(2)) : "0",
+                                        exchangeRate: String(o.exchangeRate),
+                                        shippingFee: String(o.shippingFee ?? 0),
+                                        shippingStatus: o.shippingStatus,
+                                        payStatus: o.payStatus,
+                                        orderDate: o.orderDate,
+                                        receivalDate: o.receivalDate ?? "",
+                                      });
+                                      setDialogOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Edit</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleDeleteOrder(o.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs">Delete</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
               </Table>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{filtered.length} of {orders.length} orders</p>
+
+          {/* Pagination footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            {/* Left: rows info */}
+            <p className="text-xs text-muted-foreground">
+              Showing {filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1}–{Math.min(safePage * rowsPerPage, filtered.length)} of {filtered.length} orders
+            </p>
+
+            {/* Center: page navigation */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage(1)}
+                aria-label="First page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <span className="flex items-center gap-1.5 px-2 text-sm font-medium">
+                Page
+                <Input
+                  className="h-8 w-12 text-center text-sm px-1"
+                  value={safePage}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(val) && val >= 1 && val <= totalPages) {
+                      setCurrentPage(val);
+                    }
+                  }}
+                  min={1}
+                  max={totalPages}
+                  type="number"
+                />
+                <span className="text-muted-foreground">of {totalPages}</span>
+              </span>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                aria-label="Last page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Right: rows per page selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">View:</span>
+              <Select
+                value={String(rowsPerPage)}
+                onValueChange={(v) => setRowsPerPage(Number(v))}
+              >
+                <SelectTrigger className="h-8 w-[70px] text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* New Order Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+      {/* New / Edit Order Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setEditingOrder(null);
+            setForm({
+              ...emptyForm,
+              orderId: getNextOrderId(orders, emptyForm.orderDate),
+            });
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>New Order</DialogTitle>
-            <DialogDescription>Fill in the order details.</DialogDescription>
+            <DialogTitle>{editingOrder ? "Edit Order" : "New Order"}</DialogTitle>
+            <DialogDescription>
+              {editingOrder
+                ? editingOrder.productName
+                : "Fill in the order details. Order ID is generated automatically."}
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 overflow-y-auto pr-2">
+            <div className="space-y-1.5">
+              <Label>Order ID</Label>
+              <Input value={form.orderId} disabled />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Supplier</Label>
@@ -809,20 +941,20 @@ export default function OrdersPage() {
                 <Input value={form.productName} onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))} placeholder="e.g. iPhone 15 Pro Max" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min="1"
+                value={form.quantity}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, quantity: e.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Quantity</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={form.quantity}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, quantity: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unit Price (¥)</Label>
+                <Label>Unit Price (¥) per item</Label>
                 <Input
                   type="number"
                   min="0"
@@ -833,46 +965,59 @@ export default function OrdersPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Import Cost (₱)</Label>
+                <Label>Import Cost (¥) per item</Label>
                 <Input
                   type="number"
                   min="0"
-                  value={form.importCostPhp}
+                  value={form.importCostYuan}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, importCostPhp: e.target.value }))
+                    setForm((f) => ({ ...f, importCostYuan: e.target.value }))
                   }
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="flex items-center justify-between">
-                  <span>Exchange Rate (₱ / ¥)</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={refreshExchangeRate}
-                    disabled={rateLoading}
-                    title="Refresh from market rate"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                  </Button>
-                </Label>
+            <div className="space-y-3 p-4 bg-muted/40 rounded-lg border border-border/50">
+              <Label className="font-semibold text-primary">Currency Converter</Label>
+              <CurrencyWidget 
+                onRateFetched={(rate) => {
+                  if (!editingOrder) {
+                    setForm((f) => ({ ...f, exchangeRate: rate.toFixed(4) }));
+                  }
+                }} 
+              />
+              <div className="space-y-1.5 pt-2 border-t border-border/50">
+                <Label className="text-xs text-muted-foreground mb-1 block">Exchange Rate (₱ / ¥) applied to order</Label>
                 <Input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   value={form.exchangeRate}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, exchangeRate: e.target.value }))
                   }
+                  className="bg-background"
                 />
-                {rateError && (
-                  <p className="text-[10px] text-destructive mt-0.5">
-                    {rateError}
-                  </p>
-                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Unit Price (₱) per item</Label>
+                <Input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={form.importUnitPriceYuan && form.exchangeRate ? formatCurrency((parseFloat(form.importUnitPriceYuan) || 0) * (parseFloat(form.exchangeRate) || 0)) : ""}
+                  className="bg-muted"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Import Cost (₱) per item</Label>
+                <Input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={form.importCostYuan && form.exchangeRate ? formatCurrency((parseFloat(form.importCostYuan) || 0) * (parseFloat(form.exchangeRate) || 0)) : ""}
+                  className="bg-muted"
+                />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -920,7 +1065,7 @@ export default function OrdersPage() {
                   <SelectContent>
                     <SelectItem value="paid">Paid</SelectItem>
                     <SelectItem value="unpaid">Unpaid</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
+                    <SelectItem value="overdue">Canceled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

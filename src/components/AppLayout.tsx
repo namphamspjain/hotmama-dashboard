@@ -1,7 +1,7 @@
 import { useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getOverduePaymentsCount } from "@/data/mock-data";
+import { getPendingPaymentsCount } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { NotificationBell } from "@/components/NotificationBell";
 import { useState } from "react";
 
 const navItems = [
@@ -41,7 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const overdueCount = getOverduePaymentsCount();
+  const pendingCount = getPendingPaymentsCount();
 
   const currentTitle = navItems.find((n) => n.path === location.pathname)?.title ?? "Hotmama OMS";
   const initials = user?.name
@@ -93,7 +92,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
                   {!collapsed && <span>{item.title}</span>}
-                  {item.title === "Payments" && overdueCount > 0 && (
+                  {item.title === "Payments" && pendingCount > 0 && (
                     <Badge
                       variant="destructive"
                       className={cn(
@@ -102,7 +101,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           "absolute -right-1 -top-1 h-4 w-4 p-0 flex items-center justify-center text-[10px]",
                       )}
                     >
-                      {overdueCount}
+                      {pendingCount}
                     </Badge>
                   )}
                 </Link>
@@ -121,11 +120,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <div
                   className={cn(
-                    "flex items-center justify-center rounded-full bg-sky-500 font-semibold text-black",
+                    "flex items-center justify-center rounded-full bg-sky-500 font-semibold text-black overflow-hidden shrink-0",
                     collapsed ? "h-9 w-9 text-xs" : "h-11 w-11 text-base",
                   )}
                 >
-                  {initials || "AU"}
+                  {user.avatar ? (
+                    <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+                  ) : (
+                    initials || "AU"
+                  )}
                 </div>
                 {!collapsed && (
                   <div className="min-w-0 flex-1">
@@ -192,7 +195,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center pr-2">
             <Button
               variant="ghost"
               size="icon"
@@ -201,7 +204,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             >
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
-            <NotificationBell />
           </div>
         </header>
 

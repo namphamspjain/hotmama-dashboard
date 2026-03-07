@@ -15,6 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  updateProfile: (data: Partial<User>) => void;
 }
 
 const mockUsers: Record<string, User & { password: string }> = {
@@ -48,8 +49,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("jedoms_user");
   }, []);
 
+  const updateProfile = useCallback((data: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...data };
+      localStorage.setItem("jedoms_user", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
