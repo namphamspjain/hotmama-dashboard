@@ -20,6 +20,9 @@ import { useAuth, type UserRole } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
 import { Truck, Users, Building2, Store, UserCog, Plus, Pencil, Trash2, Search, ExternalLink, Ship, Eye, EyeOff } from "lucide-react";
 
+import { usePartners } from "@/hooks/usePartners";
+import { useUsers, UserProfile } from "@/hooks/useUsers";
+
 // ============ Partner helpers ============
 
 function isSupplierReferenced(id: string) { return orders.some(o => o.supplierId === id); }
@@ -35,14 +38,18 @@ const SettingsPage = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<string>(location.state?.activeTab || "suppliers");
 
-  // Partner state
-  const [supplierList, setSupplierList] = useState<Supplier[]>(initSuppliers);
-  const [agentList, setAgentList] = useState<Agent[]>(initAgents);
-  const [warehouseList, setWarehouseList] = useState<Warehouse[]>(initWarehouses);
-  const [retailerList, setRetailerList] = useState<Retailer[]>(initRetailers);
+  const {
+    suppliers: supplierList, createSupplier, updateSupplier, deleteSupplier,
+    agents: agentList, createAgent, updateAgent, deleteAgent,
+    warehouses: warehouseList, createWarehouse, updateWarehouse, deleteWarehouse,
+    retailers: retailerList, createRetailer, updateRetailer, deleteRetailer,
+    isLoading: loadingPartners
+  } = usePartners();
 
-  // User state
-  const [userList, setUserList] = useState<MockUser[]>(initUsers);
+  const {
+    users: userList, createUser, updateUser, deleteUser: removeUser, isLoading: loadingUsers
+  } = useUsers();
+
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
 
   // Search
@@ -66,85 +73,105 @@ const SettingsPage = () => {
   // ============ Supplier CRUD ============
   const openSupplierDialog = (mode: "add" | "edit", item?: Supplier) => {
     setDialog({ type: "supplier", mode });
-    setForm(mode === "edit" && item ? { ...item } : { id: `SUP-${String(supplierList.length + 1).padStart(3, "0")}`, name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "", shippingFee: 0 });
+    setForm(mode === "edit" && item ? { ...item } : { name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "", shippingFee: 0 });
   };
-  const saveSupplier = () => {
+  const saveSupplier = async () => {
     if (!dialog) return;
-    if (dialog.mode === "add") setSupplierList(prev => [...prev, form as Supplier]);
-    else setSupplierList(prev => prev.map(s => s.id === form.id ? form as Supplier : s));
+    const { id, ...data } = form as Supplier;
+    if (dialog.mode === "add") await createSupplier.mutateAsync(data);
+    else await updateSupplier.mutateAsync({ id, updates: data });
     setDialog(null);
   };
-  const deleteSupplier = (id: string) => {
-    setSupplierList(prev => prev.filter(s => s.id !== id));
+  const handleDeleteSupplier = async (id: string) => {
+    await deleteSupplier.mutateAsync(id);
   };
 
   // ============ Agent CRUD ============
   const openAgentDialog = (mode: "add" | "edit", item?: Agent) => {
     setDialog({ type: "agent", mode });
-    setForm(mode === "edit" && item ? { ...item } : { id: `AGT-${String(agentList.length + 1).padStart(3, "0")}`, name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "", feePercent: 0 });
+    setForm(mode === "edit" && item ? { ...item } : { name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "", feePercent: 0 });
   };
-  const saveAgent = () => {
+  const saveAgent = async () => {
     if (!dialog) return;
-    if (dialog.mode === "add") setAgentList(prev => [...prev, form as Agent]);
-    else setAgentList(prev => prev.map(a => a.id === form.id ? form as Agent : a));
+    const { id, ...data } = form as Agent;
+    if (dialog.mode === "add") await createAgent.mutateAsync(data);
+    else await updateAgent.mutateAsync({ id, updates: data });
     setDialog(null);
   };
-  const deleteAgent = (id: string) => {
-    setAgentList(prev => prev.filter(a => a.id !== id));
+  const handleDeleteAgent = async (id: string) => {
+    await deleteAgent.mutateAsync(id);
   };
 
   // ============ Warehouse CRUD ============
   const openWarehouseDialog = (mode: "add" | "edit", item?: Warehouse) => {
     setDialog({ type: "warehouse", mode });
-    setForm(mode === "edit" && item ? { ...item } : { id: `WH-${String(warehouseList.length + 1).padStart(3, "0")}`, name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "" });
+    setForm(mode === "edit" && item ? { ...item } : { name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "" });
   };
-  const saveWarehouse = () => {
+  const saveWarehouse = async () => {
     if (!dialog) return;
-    if (dialog.mode === "add") setWarehouseList(prev => [...prev, form as Warehouse]);
-    else setWarehouseList(prev => prev.map(w => w.id === form.id ? form as Warehouse : w));
+    const { id, ...data } = form as Warehouse;
+    if (dialog.mode === "add") await createWarehouse.mutateAsync(data);
+    else await updateWarehouse.mutateAsync({ id, updates: data });
     setDialog(null);
   };
-  const deleteWarehouse = (id: string) => {
-    setWarehouseList(prev => prev.filter(w => w.id !== id));
+  const handleDeleteWarehouse = async (id: string) => {
+    await deleteWarehouse.mutateAsync(id);
   };
 
   // ============ Retailer CRUD ============
   const openRetailerDialog = (mode: "add" | "edit", item?: Retailer) => {
     setDialog({ type: "retailer", mode });
-    setForm(mode === "edit" && item ? { ...item } : { id: `RET-${String(retailerList.length + 1).padStart(3, "0")}`, name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "", paymentMethod: "Bank Transfer" });
+    setForm(mode === "edit" && item ? { ...item } : { name: "", contactPerson: "", phone: "", email: "", address: "", socialUrl: "", paymentMethod: "Bank Transfer" });
   };
-  const saveRetailer = () => {
+  const saveRetailer = async () => {
     if (!dialog) return;
-    if (dialog.mode === "add") setRetailerList(prev => [...prev, form as Retailer]);
-    else setRetailerList(prev => prev.map(r => r.id === form.id ? form as Retailer : r));
+    const { id, ...data } = form as Retailer;
+    if (dialog.mode === "add") await createRetailer.mutateAsync(data);
+    else await updateRetailer.mutateAsync({ id, updates: data });
     setDialog(null);
   };
-  const deleteRetailer = (id: string) => {
-    setRetailerList(prev => prev.filter(r => r.id !== id));
+  const handleDeleteRetailer = async (id: string) => {
+    await deleteRetailer.mutateAsync(id);
   };
 
   // ============ User CRUD (admin only) ============
-  const openUserDialog = (mode: "add" | "edit", item?: MockUser) => {
+  const openUserDialog = (mode: "add" | "edit", item?: UserProfile) => {
     setDialog({ type: "user", mode });
     setForm(
       mode === "edit" && item
         ? { ...item }
-        : { id: String(userList.length + 1), name: "", email: "", password: "", role: "viewer" as UserRole, active: true },
+        : { email: "", password: "", name: "", role: "viewer" as UserRole, active: true },
     );
   };
-  const saveUser = () => {
+  const saveUser = async () => {
     if (!dialog) return;
-    if (dialog.mode === "add") setUserList(prev => [...prev, form as MockUser]);
-    else setUserList(prev => prev.map(u => u.id === form.id ? form as MockUser : u));
-    
-    if (user && form.id === String(user.id)) {
-      updateProfile({ name: form.name, avatar: form.avatar });
+    try {
+      if (dialog.mode === "add") {
+        await createUser.mutateAsync({
+          email: form.email,
+          password: form.password,
+          name: form.name,
+          role: form.role,
+        })
+      } else {
+        await updateUser.mutateAsync({
+          id: form.id,
+          updates: { name: form.name, role: form.role },
+        })
+      }
+      
+      if (user && form.id === String(user.id)) {
+        updateProfile({ name: form.name, avatar: form.avatar });
+      }
+      setDialog(null);
+    } catch (err: any) {
+      alert(err.message || 'Error saving user');
     }
-    
-    setDialog(null);
   };
-  const deleteUser = (id: string) => {
-    setUserList(prev => prev.filter(u => u.id !== id));
+  const handleDeleteUser = async (id: string) => {
+    if (confirm("Are you sure you want to remove this user?")) {
+      await removeUser.mutateAsync(id);
+    }
   };
 
   // ============ Filtering ============
@@ -216,7 +243,7 @@ const SettingsPage = () => {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label>Name</Label><Input value={form.name ?? ""} onChange={e => updateForm("name", e.target.value)} /></div>
-        <div><Label>Username</Label><Input type="text" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
+        <div><Label>Email</Label><Input type="email" value={form.email ?? ""} onChange={e => updateForm("email", e.target.value)} /></div>
       </div>
       <div>
         <Label>Password</Label>
@@ -346,7 +373,7 @@ const SettingsPage = () => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => deleteSupplier(s.id)}
+                                  onClick={() => handleDeleteSupplier(s.id)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -428,7 +455,7 @@ const SettingsPage = () => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => deleteAgent(a.id)}
+                                  onClick={() => handleDeleteAgent(a.id)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -509,7 +536,7 @@ const SettingsPage = () => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => deleteWarehouse(w.id)}
+                                  onClick={() => handleDeleteWarehouse(w.id)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -591,7 +618,7 @@ const SettingsPage = () => {
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => deleteRetailer(r.id)}
+                                  onClick={() => handleDeleteRetailer(r.id)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -621,7 +648,7 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead className="w-16">Photo</TableHead><TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
+                  <TableHead className="w-16">Photo</TableHead><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredUsers.map(u => {
@@ -639,32 +666,6 @@ const SettingsPage = () => {
                         </TableCell>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email}</TableCell>
-                        <TableCell>
-                          {!u.password ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <span>{isVisible ? u.password : "••••••••"}</span>
-                              <button
-                                type="button"
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                                onClick={() =>
-                                  setVisiblePasswords(prev => ({
-                                    ...prev,
-                                    [u.id]: !prev[u.id],
-                                  }))
-                                }
-                                aria-label={isVisible ? "Hide password" : "Show password"}
-                              >
-                                {isVisible ? (
-                                  <EyeOff className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                            </div>
-                          )}
-                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
                             {u.role}
@@ -695,7 +696,7 @@ const SettingsPage = () => {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    onClick={() => deleteUser(u.id)}
+                                    onClick={() => handleDeleteUser(u.id)}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>

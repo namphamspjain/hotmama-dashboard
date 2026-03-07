@@ -1,14 +1,15 @@
-import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import {
-  inventory as mockInventory,
-  orders,
-  type InventoryItem,
-  type CostItem,
-} from "@/data/mock-data";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { type InventoryItem, type CostItem } from "@/data/mock-data";
+import { useInventory as useInventoryHook } from "@/hooks/useInventory";
+import { useOrders } from "@/hooks/useOrders";
 
 interface InventoryContextValue {
   items: InventoryItem[];
-  setItems: Dispatch<SetStateAction<InventoryItem[]>>;
+  isLoading: boolean;
+  isError: boolean;
+  createInventoryItem: any;
+  updateInventoryItem: any;
+  deleteInventoryItem: any;
   /** Auto-generated Cost of Loss CostItem entries from damaged/lost inventory */
   costOfLossEntries: CostItem[];
   /** Sum of all Cost of Loss amounts */
@@ -18,7 +19,16 @@ interface InventoryContextValue {
 const InventoryContext = createContext<InventoryContextValue | null>(null);
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<InventoryItem[]>(mockInventory);
+  const { 
+    inventory: items, 
+    isLoading, 
+    isError,
+    createInventoryItem, 
+    updateInventoryItem, 
+    deleteInventoryItem 
+  } = useInventoryHook();
+  
+  const { orders } = useOrders();
 
   // Pre-compute order unit-cost map: orderId → (unitPricePhp + importCostPhp) per item
   const orderCostMap = useMemo(() => {
@@ -28,7 +38,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       map[o.id] = Math.round(unitPricePhp + o.importCostPhp);
     });
     return map;
-  }, []);
+  }, [orders]);
 
   // Derive Cost of Loss entries from damaged/lost inventory items
   const costOfLossEntries = useMemo<CostItem[]>(() => {
@@ -53,8 +63,17 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<InventoryContextValue>(
-    () => ({ items, setItems, costOfLossEntries, costOfLossTotal }),
-    [items, costOfLossEntries, costOfLossTotal],
+    () => ({ 
+      items, 
+      isLoading,
+      isError,
+      createInventoryItem,
+      updateInventoryItem,
+      deleteInventoryItem,
+      costOfLossEntries, 
+      costOfLossTotal 
+    }),
+    [items, isLoading, isError, createInventoryItem, updateInventoryItem, deleteInventoryItem, costOfLossEntries, costOfLossTotal],
   );
 
   return (

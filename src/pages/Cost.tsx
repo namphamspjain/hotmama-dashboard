@@ -40,14 +40,14 @@ import {
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInventory } from "@/contexts/InventoryContext";
+import { useOrders } from "@/hooks/useOrders";
+import { useCosts } from "@/hooks/useCosts";
 import {
-  costs as mockCosts,
-  orders as mockOrders,
   type CostItem,
   type CostType,
   formatCurrency,
 } from "@/data/mock-data";
-import { Package, Info } from "lucide-react";
+import { Package, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import {
@@ -104,10 +104,12 @@ export default function CostPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "editor";
   const { costOfLossEntries, costOfLossTotal } = useInventory();
+  const { orders = [], isLoading: ordersLoading, isError: ordersError } = useOrders();
+  const { costs: dbCosts, isLoading: costsLoading, isError: costsError, createCost, updateCost, deleteCost } = useCosts();
 
-  const [costs, setCosts] = useState<CostItem[]>(() =>
-    mockCosts.filter((c) => c.type !== "Cost of Loss")
-  );
+  const isLoading = ordersLoading || costsLoading;
+  const isError = ordersError || costsError;
+
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<CostType | "all">("all");
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
@@ -126,9 +128,9 @@ export default function CostPage() {
 
   // Merge manually-entered costs with auto-generated Cost of Loss entries
   const allCosts = useMemo(() => [
-    ...costs,
+    ...dbCosts,
     ...costOfLossEntries,
-  ], [costs, costOfLossEntries]);
+  ], [dbCosts, costOfLossEntries]);
 
   const visibleCosts = useMemo(() => {
     if (!dateRange.from && !dateRange.to) return allCosts;
@@ -145,10 +147,10 @@ export default function CostPage() {
   }, [allCosts, dateRange.from, dateRange.to]);
 
   const visibleOrdersForCoG = useMemo(() => {
-    if (!dateRange.from && !dateRange.to) return mockOrders;
+    if (!dateRange.from && !dateRange.to) return orders;
     const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
     const toTs = dateRange.to ? dateRange.to.setHours(23, 59, 59, 999) : null;
-    return mockOrders.filter((o) => {
+    return orders.filter((o) => {
       const d = new Date(o.orderDate);
       const ts = d.getTime();
       if (Number.isNaN(ts)) return true;
@@ -156,7 +158,7 @@ export default function CostPage() {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [dateRange.from, dateRange.to]);
+  }, [orders, dateRange.from, dateRange.to]);
 
   const cogValue = useMemo(() => {
     return visibleOrdersForCoG.reduce((s, o) => s + ((o.importUnitPriceYuan * o.exchangeRate + o.importCostPhp) * o.quantity), 0);
@@ -279,12 +281,12 @@ export default function CostPage() {
     if (!dialogOpen) return;
     if (editingCost) return;
     if (!form.costDate) return;
-    const nextId = getNextCostId(costs, form.costDate);
+    const nextId = getNextCostId(dbCosts, form.costDate);
     if (form.id === nextId) return;
     setForm((prev) => ({ ...prev, id: nextId }));
-  }, [dialogOpen, editingCost, form.costDate, costs]);
+  }, [dialogOpen, editingCost, form.costDate, dbCosts]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.type || !form.amount || !form.costDate) return;
     const id = editingCost?.id ?? form.id;
     const amount = parseFloat(form.amount) || 0;
@@ -296,18 +298,27 @@ export default function CostPage() {
       costDate: form.costDate,
       receipt: form.receipt || undefined,
     };
-    if (editingCost) {
-      setCosts((prev) => prev.map((c) => (c.id === editingCost.id ? next : c)));
-    } else {
-      setCosts((prev) => [next, ...prev]);
+    
+    try {
+      if (editingCost) {
+        await updateCost.mutateAsync({ id: editingCost.id, updates: next });
+      } else {
+        await createCost.mutateAsync(next);
+      }
+      setForm(emptyForm);
+      setEditingCost(null);
+      setDialogOpen(false);
+    } catch (e) {
+      console.error("Failed to save cost", e);
     }
-    setForm(emptyForm);
-    setEditingCost(null);
-    setDialogOpen(false);
   };
 
-  const handleDeleteCost = (id: string) => {
-    setCosts((prev) => prev.filter((c) => c.id !== id));
+  const handleDeleteCost = async (id: string) => {
+    try {
+      await deleteCost.mutateAsync(id);
+    } catch (e) {
+      console.error("Failed to delete cost", e);
+    }
   };
 
   const metricCards = [
@@ -325,6 +336,27 @@ export default function CostPage() {
       icon: DollarSign,
     },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+          <h2 className="text-lg font-semibold">Error Loading Costs</h2>
+        </div>
+        <p className="text-muted-foreground">Failed to fetch costs or orders data. Please check your connection or RLS policies.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -534,14 +566,14 @@ export default function CostPage() {
               {canEdit && (
                 <Button
                   size="sm"
-                  onClick={() => {
-                    setEditingCost(null);
-                    setForm({
-                      ...emptyForm,
-                      id: getNextCostId(costs, emptyForm.costDate),
-                    });
-                    setDialogOpen(true);
-                  }}
+                      onClick={() => {
+                        setEditingCost(null);
+                        setForm({
+                          ...emptyForm,
+                          id: getNextCostId(dbCosts, emptyForm.costDate),
+                        });
+                        setDialogOpen(true);
+                      }}
                 >
                   <Plus className="h-4 w-4 mr-1" /> New Cost
                 </Button>
@@ -810,7 +842,7 @@ export default function CostPage() {
             setEditingCost(null);
             setForm({
               ...emptyForm,
-              id: getNextCostId(costs, emptyForm.costDate),
+              id: getNextCostId(dbCosts, emptyForm.costDate),
             });
           }
         }}

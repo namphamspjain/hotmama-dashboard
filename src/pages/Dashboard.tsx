@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  orders,
-  inventory,
-  sales,
-  payments,
   suppliers,
   agents,
   formatCurrency,
   getRetailerName,
   getSupplierName,
 } from "@/data/mock-data";
+import { useOrders } from "@/hooks/useOrders";
+import { useInventory } from "@/hooks/useInventory";
+import { useSales } from "@/hooks/useSales";
+import { usePayments } from "@/hooks/usePayments";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -56,7 +56,6 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 /* ─── Shared helpers & config types ─── */
-const paymentsOverdueCount = payments.filter((p) => p.status === "overdue").length;
 
 type MetricKey =
   // Orders
@@ -266,6 +265,35 @@ const DashboardPage = () => {
     window.localStorage.setItem(CHART_STORAGE_KEY, JSON.stringify(selectedCharts));
   }, [selectedCharts]);
 
+  const { orders = [], isLoading: ordersLoading, isError: ordersError } = useOrders();
+  const { inventory = [], isLoading: inventoryLoading, isError: inventoryError } = useInventory();
+  const { sales = [], isLoading: salesLoading, isError: salesError } = useSales();
+  const { payments = [], isLoading: paymentsLoading, isError: paymentsError } = usePayments();
+
+  const isLoading = ordersLoading || inventoryLoading || salesLoading || paymentsLoading;
+  const isError = ordersError || inventoryError || salesError || paymentsError;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+          <h2 className="text-lg font-semibold">Error Loading Dashboard</h2>
+        </div>
+        <p className="text-muted-foreground">Failed to fetch data from Supabase. Please check your connection or RLS policies.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
+  }
+
   // Filter datasets by date range
   const visibleOrders = useMemo(() => {
     if (!dateRange.from && !dateRange.to) return orders;
@@ -314,7 +342,7 @@ const DashboardPage = () => {
     const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
     const toTs = dateRange.to ? dateRange.to.setHours(23, 59, 59, 999) : null;
     return payments.filter((p) => {
-      const d = new Date(p.dueDate);
+      const d = new Date(p.payDate);
       const ts = d.getTime();
       if (Number.isNaN(ts)) return true;
       if (fromTs !== null && ts < fromTs) return false;
@@ -391,7 +419,7 @@ const DashboardPage = () => {
     const salesPending = visibleSales.filter((sl) => sl.deliveryStatus === "pending").length;
     const salesRefunded = visibleSales.filter((sl) => sl.deliveryStatus === "refunded").length;
 
-    const overdueCount = visiblePayments.filter((p) => p.status === "overdue").length || paymentsOverdueCount;
+    const overdueCount = visiblePayments.filter((p) => p.status === "overdue").length || payments.filter((p) => p.status === "overdue").length;
 
     const agentPayments = visiblePayments.filter((p) => p.type === "agent");
     const retailerPayments = visiblePayments.filter((p) => p.type === "retailer");
@@ -621,7 +649,7 @@ const statusColor: Record<string, string> = {
   const recentPayments = useMemo(
     () =>
       [...visiblePayments]
-        .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
+        .sort((a, b) => b.payDate.localeCompare(a.payDate))
         .slice(0, 5),
     [visiblePayments],
   );
@@ -1655,7 +1683,7 @@ const statusColor: Record<string, string> = {
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{p.partnerName}</p>
                           <p className="text-xs text-muted-foreground">
-                            Due {p.dueDate} · {sideLabel}
+                            Due {p.payDate} · {sideLabel}
                           </p>
                         </div>
                       </div>

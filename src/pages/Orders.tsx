@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,14 +49,17 @@ import {
   Legend,
 } from "recharts";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  orders as mockOrders, suppliers, agents, Order, ShippingStatus, PayStatus,
-  formatCurrency, getSupplierName, getAgentName, payments,
-} from "@/data/mock-data";
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import { CurrencyWidget } from "@/components/CurrencyWidget";
+
+// Real DB hooks & Types
+import { useOrders } from "@/hooks/useOrders";
+import {
+  suppliers, agents, Order, ShippingStatus, PayStatus,
+  formatCurrency, getSupplierName, getAgentName, payments,
+} from "@/data/mock-data";
 
 type SortField = "id" | "orderDate" | "quantity" | "importCostPhp";
 type SortDir = "asc" | "desc";
@@ -122,7 +126,7 @@ export default function OrdersPage() {
   const canEdit = user?.role === "admin" || user?.role === "editor";
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+  const { orders, isLoading, createOrder, updateOrder, deleteOrder } = useOrders();
   const [search, setSearch] = useState("");
   const [shippingFilter, setShippingFilter] = useState<string>("all");
   const [payFilter, setPayFilter] = useState<string>("all");
@@ -245,12 +249,14 @@ export default function OrdersPage() {
     const nextId = getNextOrderId(orders, form.orderDate);
     if (form.orderId === nextId) return;
     setForm((prev) => ({ ...prev, orderId: nextId }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialogOpen, editingOrder, form.orderDate, orders]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.supplierId || !form.agentId || !form.productName || !form.quantity) return;
-    const baseOrder: Order = {
+    const baseOrder = {
       id: editingOrder?.id ?? form.orderId,
+      uuid: editingOrder?.uuid,
       supplierId: form.supplierId,
       agentId: form.agentId,
       productType: form.productType,
@@ -264,23 +270,31 @@ export default function OrdersPage() {
       payStatus: form.payStatus,
       orderDate: form.orderDate,
       receivalDate: form.receivalDate || undefined,
-    };
+    } as Order;
 
-    if (editingOrder) {
-      setOrders((prev) => prev.map((o) => (o.id === editingOrder.id ? baseOrder : o)));
-    } else {
-      setOrders((prev) => [baseOrder, ...prev]);
+    try {
+      if (editingOrder && editingOrder.uuid) {
+        await updateOrder.mutateAsync({ uuid: editingOrder.uuid, updates: baseOrder });
+      } else {
+        await createOrder.mutateAsync(baseOrder);
+      }
+      setForm(emptyForm);
+      setEditingOrder(null);
+      setDialogOpen(false);
+    } catch (e) {
+      console.error("Failed to save order", e);
     }
-
-    setForm(emptyForm);
-    setEditingOrder(null);
-    setDialogOpen(false);
   };
 
-  const handleDeleteOrder = (id: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
-    if (rowRefs.current[id]) {
-      delete rowRefs.current[id];
+  const handleDeleteOrder = async (id: string, uuid?: string) => {
+    if (!uuid) return;
+    try {
+      await deleteOrder.mutateAsync(uuid);
+      if (rowRefs.current[id]) {
+        delete rowRefs.current[id];
+      }
+    } catch (e) {
+      console.error("Failed to delete order", e);
     }
   };
 

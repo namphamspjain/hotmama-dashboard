@@ -37,7 +37,9 @@ import {
 import { downloadCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 
-type SortKey = "id" | "amount" | "dueDate";
+import { usePayments } from "@/hooks/usePayments";
+
+type SortKey = "id" | "amount" | "payDate";
 type SortDir = "asc" | "desc";
 
 const AGENT_PIE_COLORS = [
@@ -77,13 +79,13 @@ const statusBadgeRetailer = (s: RetailerPayStatus) => {
 
 const getOrderDate = (p: Payment): string => {
   if (p.type === "agent") {
-    return orders.find((o) => o.id === p.linkedId)?.orderDate ?? p.dueDate;
+    return orders.find((o) => o.id === p.linkedId)?.orderDate ?? p.payDate;
   }
-  return sales.find((s) => s.id === p.linkedId)?.saleDate ?? p.dueDate;
+  return sales.find((s) => s.id === p.linkedId)?.saleDate ?? p.payDate;
 };
 
-const getNextPayId = (list: Payment[], type: PaymentType, dueDate: string): string => {
-  const dateKey = dueDate.replace(/-/g, "");
+const getNextPayId = (list: Payment[], type: PaymentType, payDate: string): string => {
+  const dateKey = payDate.replace(/-/g, "");
   const prefix = type === "agent" ? "PAY-AG" : "PAY-RT";
   let max = 0;
   list.forEach((p) => {
@@ -104,7 +106,7 @@ const emptyForm = {
   linkedId: "",
   amount: "",
   status: "unpaid" as PayStatus | RetailerPayStatus,
-  dueDate: new Date().toISOString().slice(0, 10),
+  payDate: new Date().toISOString().slice(0, 10),
   paidDate: "",
 };
 
@@ -113,10 +115,17 @@ const PaymentsPage = () => {
   const navigate = useNavigate();
   const canEdit = user?.role === "admin" || user?.role === "editor";
 
-  const [data, setData] = useState<Payment[]>(initialPayments);
+  const {
+    payments: data,
+    isLoading,
+    isError,
+    createPayment,
+    updatePayment,
+    deletePayment,
+  } = usePayments();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("dueDate");
+  const [sortKey, setSortKey] = useState<SortKey>("payDate");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({ from: null, to: null });
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -170,7 +179,7 @@ const PaymentsPage = () => {
           String(p.amount),
           statusLabel || "",
           getOrderDate(p),
-          p.paidDate || "—",
+          p.payDate || "—",
         ];
         return fields.some((f) => f.toLowerCase().includes(q));
       });
@@ -243,15 +252,15 @@ const PaymentsPage = () => {
   useEffect(() => {
     if (!paymentDialogOpen) return;
     if (editingPayment) return;
-    if (!form.dueDate) return;
-    const nextId = getNextPayId(data, form.type, form.dueDate);
+    if (!form.payDate) return;
+    const nextId = getNextPayId(data, form.type, form.payDate);
     if (form.payId === nextId) return;
     setForm((prev) => ({ ...prev, payId: nextId }));
-  }, [paymentDialogOpen, editingPayment, form.dueDate, form.type, data]);
+  }, [paymentDialogOpen, editingPayment, form.payDate, form.type, data]);
 
   const openNewPayment = () => {
     setEditingPayment(null);
-    setForm({ ...emptyForm, payId: getNextPayId(data, emptyForm.type, emptyForm.dueDate), dueDate: new Date().toISOString().slice(0, 10) });
+    setForm({ ...emptyForm, payId: getNextPayId(data, emptyForm.type, emptyForm.payDate), payDate: new Date().toISOString().slice(0, 10) });
     setPaymentDialogOpen(true);
   };
 
@@ -264,56 +273,70 @@ const PaymentsPage = () => {
       linkedId: p.linkedId,
       amount: String(p.amount),
       status: p.status,
-      dueDate: p.dueDate,
-      paidDate: p.paidDate ?? "",
+      payDate: p.payDate,
+      paidDate: p.notes ?? "",
     });
     setPaymentDialogOpen(true);
   };
 
-  const handlePaymentFormSubmit = () => {
+  const handlePaymentFormSubmit = async () => {
     const amountNum = parseInt(form.amount, 10);
-    if (!form.partnerName.trim() || !form.linkedId.trim() || isNaN(amountNum) || amountNum < 0 || !form.dueDate) return;
-    const paidDate = form.paidDate.trim() || undefined;
-    if (editingPayment) {
-      setData((prev) =>
-        prev.map((p) =>
-          p.id === editingPayment.id
-            ? {
-                ...p,
-                type: form.type,
-                partnerName: form.partnerName.trim(),
-                linkedId: form.linkedId.trim(),
-                amount: amountNum,
-                status: form.status,
-                dueDate: form.dueDate,
-                paidDate,
-              }
-            : p,
-        ),
-      );
-    } else {
-      const id = getNextPayId(data, form.type, form.dueDate);
-      setData((prev) =>
-        prev.concat({
-          id,
-          type: form.type,
-          partnerName: form.partnerName.trim(),
-          linkedId: form.linkedId.trim(),
-          amount: amountNum,
-          status: form.status,
-          dueDate: form.dueDate,
-          paidDate,
-        }),
-      );
+    if (!form.partnerName.trim() || !form.linkedId.trim() || isNaN(amountNum) || amountNum < 0 || !form.payDate) return;
+    const payment = {
+      id: editingPayment?.id ?? form.payId,
+      uuid: editingPayment?.uuid,
+      type: form.type,
+      partnerName: form.partnerName.trim(),
+      linkedId: form.linkedId.trim(),
+      amount: amountNum,
+      status: form.status,
+      payDate: form.payDate,
+      notes: form.paidDate.trim() || undefined, // Store 'paidDate' as notes for now until dedicated columns are standardized
+    } as Payment;
+
+    try {
+      if (editingPayment && editingPayment.uuid) {
+        await updatePayment.mutateAsync({ uuid: editingPayment.uuid, updates: payment });
+      } else {
+        await createPayment.mutateAsync(payment);
+      }
+      setPaymentDialogOpen(false);
+      setEditingPayment(null);
+      setForm(emptyForm);
+    } catch (e) {
+      console.error("Failed to save payment", e);
     }
-    setPaymentDialogOpen(false);
-    setEditingPayment(null);
-    setForm(emptyForm);
   };
 
-  const handleDeletePayment = (id: string) => {
-    setData((prev) => prev.filter((p) => p.id !== id));
+  const handleDeletePayment = async (uuid?: string) => {
+    if (!uuid) return;
+    try {
+      await deletePayment.mutateAsync(uuid);
+    } catch (e) {
+      console.error("Failed to delete payment", e);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+          <h2 className="text-lg font-semibold">Error Loading Payments</h2>
+        </div>
+        <p className="text-muted-foreground">Failed to fetch payments data. Please check your connection or RLS policies.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
+  }
 
   const SortHeader = ({ label, k }: { label: string; k: SortKey }) => (
     <Button variant="ghost" size="sm" className="h-8 -ml-3 font-medium" onClick={() => toggleSort(k)}>
@@ -338,7 +361,7 @@ const PaymentsPage = () => {
           <TableHead className="text-right whitespace-nowrap"><SortHeader label="Amount" k="amount" /></TableHead>
           <TableHead className="whitespace-nowrap">Payment</TableHead>
           <TableHead className="whitespace-nowrap">
-            <SortHeader label={type === "retailer" ? "Sale Date" : "Order Date"} k="dueDate" />
+            <SortHeader label={type === "retailer" ? "Sale Date" : "Order Date"} k="payDate" />
           </TableHead>
           <TableHead className="whitespace-nowrap">Paid Date</TableHead>
           {canEdit && <TableHead className="w-10" />}
@@ -371,7 +394,7 @@ const PaymentsPage = () => {
               {p.type === "agent" ? statusBadgeAgent(p.status as PayStatus) : statusBadgeRetailer(p.status as RetailerPayStatus)}
             </TableCell>
             <TableCell className="whitespace-nowrap">{getOrderDate(p)}</TableCell>
-            <TableCell className="whitespace-nowrap">{p.paidDate ?? "—"}</TableCell>
+            <TableCell className="whitespace-nowrap">{p.notes ?? "—"}</TableCell>
             {canEdit && (
               <TableCell className="text-right align-middle">
                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -396,7 +419,7 @@ const PaymentsPage = () => {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeletePayment(p.id)}
+                        onClick={() => handleDeletePayment(p.uuid)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -713,7 +736,7 @@ const PaymentsPage = () => {
                     String(p.amount),
                     p.status,
                     getOrderDate(p),
-                    p.paidDate ?? "",
+                    p.notes ?? "",
                   ]);
                   downloadCSV("payments.csv", headers, rows);
                 }}
@@ -930,8 +953,8 @@ const PaymentsPage = () => {
               <Label>{form.type === "agent" ? "Order Date" : "Sale Date"}</Label>
               <Input
                 type="date"
-                value={form.dueDate}
-                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                value={form.payDate}
+                onChange={(e) => setForm((f) => ({ ...f, payDate: e.target.value }))}
               />
             </div>
             <div className="grid gap-2">

@@ -40,7 +40,7 @@ export type ShippingStatus = "shipping" | "received" | "failed";
 export type PayStatus = "paid" | "unpaid" | "overdue";
 
 export interface Order {
-  id: string; supplierId: string; agentId: string; productType: string; productName: string;
+  id: string; uuid?: string; supplierId: string; agentId: string; productType: string; productName: string;
   quantity: number; importUnitPriceYuan: number; exchangeRate: number; importCostPhp: number;
   shippingFee: number;
   shippingStatus: ShippingStatus; payStatus: PayStatus; orderDate: string; receivalDate?: string; notes?: string;
@@ -59,7 +59,7 @@ export const orders: Order[] = [
 export type InventoryStatus = "good" | "damaged" | "lost";
 
 export interface InventoryItem {
-  id: string; productName: string; productType: string; status: InventoryStatus;
+  id: string; uuid?: string; productName: string; productType: string; status: InventoryStatus;
   orderId: string; receivalDate: string; notes?: string;
 }
 
@@ -79,7 +79,7 @@ export const inventory: InventoryItem[] = [
 export type DeliveryStatus = "pending" | "delivered" | "refunded";
 
 export interface Sale {
-  id: string; retailerId: string; productName: string; productType: string; quantity: number;
+  id: string; uuid?: string; retailerId: string; inventoryId?: string | null; productName: string; productType: string; quantity: number;
   sellingPrice: number; wholesalePrice: number; deliveryFee: number; revenue: number;
   netProfit: number; deliveryStatus: DeliveryStatus; saleDate: string; warrantyDays: number;
 }
@@ -97,19 +97,19 @@ export type PaymentType = "agent" | "retailer";
 export type RetailerPayStatus = "unsold" | "pending" | "sold" | "refunded";
 
 export interface Payment {
-  id: string; type: PaymentType; partnerName: string; linkedId: string; amount: number;
-  status: PayStatus | RetailerPayStatus; dueDate: string; paidDate?: string;
+  id: string; uuid?: string; type: PaymentType; partnerName: string; linkedId: string; amount: number;
+  status: PayStatus | RetailerPayStatus; payDate: string; notes?: string;
 }
 
 export const payments: Payment[] = [
-  { id: "PAY-AG-20260125-001", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260110-001", amount: 5000, status: "paid", dueDate: "2026-01-25", paidDate: "2026-01-24" },
-  { id: "PAY-AG-20260129-002", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260115-002", amount: 1077, status: "paid", dueDate: "2026-01-29", paidDate: "2026-01-28" },
-  { id: "PAY-AG-20260215-003", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260201-003", amount: 1635, status: "unpaid", dueDate: "2026-02-15" },
-  { id: "PAY-AG-20260119-004", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260105-006", amount: 1190, status: "overdue", dueDate: "2026-01-19" },
-  { id: "PAY-RT-20260201-001", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260201-005", amount: 216000, status: "sold", dueDate: "2026-02-01", paidDate: "2026-01-31" },
-  { id: "PAY-RT-20260204-002", type: "retailer", partnerName: "iGadget Store", linkedId: "SL-20260128-002", amount: 76000, status: "sold", dueDate: "2026-02-04", paidDate: "2026-02-03" },
-  { id: "PAY-RT-20260226-003", type: "retailer", partnerName: "Apple Corner MNL", linkedId: "SL-20260212-003", amount: 85000, status: "pending", dueDate: "2026-02-26" },
-  { id: "PAY-RT-20260212-004", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260205-004", amount: 90000, status: "refunded", dueDate: "2026-02-12" },
+  { id: "PAY-AG-20260125-001", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260110-001", amount: 5000, status: "paid", payDate: "2026-01-25", notes: "2026-01-24" },
+  { id: "PAY-AG-20260129-002", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260115-002", amount: 1077, status: "paid", payDate: "2026-01-29", notes: "2026-01-28" },
+  { id: "PAY-AG-20260215-003", type: "agent", partnerName: "FastForward Logistics", linkedId: "OD-20260201-003", amount: 1635, status: "unpaid", payDate: "2026-02-15" },
+  { id: "PAY-AG-20260119-004", type: "agent", partnerName: "QuickShip PH", linkedId: "OD-20260105-006", amount: 1190, status: "overdue", payDate: "2026-01-19" },
+  { id: "PAY-RT-20260201-001", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260201-005", amount: 216000, status: "sold", payDate: "2026-02-01", notes: "2026-01-31" },
+  { id: "PAY-RT-20260204-002", type: "retailer", partnerName: "iGadget Store", linkedId: "SL-20260128-002", amount: 76000, status: "sold", payDate: "2026-02-04", notes: "2026-02-03" },
+  { id: "PAY-RT-20260226-003", type: "retailer", partnerName: "Apple Corner MNL", linkedId: "SL-20260212-003", amount: 85000, status: "pending", payDate: "2026-02-26" },
+  { id: "PAY-RT-20260212-004", type: "retailer", partnerName: "TechZone PH", linkedId: "SL-20260205-004", amount: 90000, status: "refunded", payDate: "2026-02-12" },
 ];
 
 // ============ COSTS ============

@@ -103,7 +103,15 @@ export default function InventoryPage() {
   const canEdit = user?.role === "admin" || user?.role === "editor";
   const navigate = useNavigate();
 
-  const { items, setItems, costOfLossTotal } = useInventory();
+  const { 
+    items, 
+    costOfLossTotal, 
+    isLoading, 
+    isError,
+    createInventoryItem, 
+    updateInventoryItem, 
+    deleteInventoryItem 
+  } = useInventory();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -240,11 +248,6 @@ export default function InventoryPage() {
     return list;
   }, [visibleItems, search, statusFilter, typeFilter, sortField, sortDir]);
 
-  // Reset page when filters or rowsPerPage change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter, typeFilter, rowsPerPage, dateRange.from, dateRange.to]);
-
   // Pagination derived values
   const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -274,33 +277,44 @@ export default function InventoryPage() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.orderId || !form.productName || !form.productType || !form.receivalDate) return;
     const id = editingItem ? editingItem.id : getNextProductId(items, form.receivalDate);
-    const nextItem: InventoryItem = {
+    const nextItem = {
       id,
+      uuid: editingItem?.uuid,
       orderId: form.orderId,
       receivalDate: form.receivalDate,
       productType: form.productType,
       productName: form.productName,
       status: form.status,
       notes: form.notes || undefined,
-    };
-    if (editingItem) {
-      setItems((prev) => prev.map((i) => (i.id === editingItem.id ? nextItem : i)));
-    } else {
-      setItems((prev) => [nextItem, ...prev]);
+    } as InventoryItem;
+
+    try {
+      if (editingItem && editingItem.uuid) {
+        await updateInventoryItem.mutateAsync({ uuid: editingItem.uuid, updates: nextItem });
+      } else {
+        await createInventoryItem.mutateAsync(nextItem);
+      }
+      setDialogOpen(false);
+      setEditingItem(null);
+      setForm({
+        ...emptyForm,
+        productId: getNextProductId(items, emptyForm.receivalDate),
+      });
+    } catch (e) {
+      console.error("Failed to save inventory item:", e);
     }
-    setDialogOpen(false);
-    setEditingItem(null);
-    setForm({
-      ...emptyForm,
-      productId: getNextProductId(items, emptyForm.receivalDate),
-    });
   };
 
-  const handleDeleteItem = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const handleDeleteItem = async (uuid?: string) => {
+    if (!uuid) return;
+    try {
+      await deleteInventoryItem.mutateAsync(uuid);
+    } catch (e) {
+      console.error("Failed to delete inventory item", e);
+    }
   };
 
   // Keep Product ID in sync with receival date for new items
@@ -311,6 +325,7 @@ export default function InventoryPage() {
     const nextId = getNextProductId(items, form.receivalDate);
     if (form.productId === nextId) return;
     setForm((prev) => ({ ...prev, productId: nextId }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialogOpen, editingItem, form.receivalDate, items]);
 
   const metricCards = [
@@ -320,6 +335,28 @@ export default function InventoryPage() {
     { label: "Lost", value: metrics.lost, icon: XCircle },
     { label: "Cost of Loss", value: formatCurrency(costOfLossTotal), icon: XCircle },
   ];
+
+  // loading state
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+          <h2 className="text-lg font-semibold">Error Loading Inventory</h2>
+        </div>
+        <p className="text-muted-foreground">Failed to fetch inventory data. Please check your connection or RLS policies.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

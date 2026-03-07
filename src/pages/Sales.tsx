@@ -5,6 +5,7 @@ import {
   Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Download,
   Pencil, Trash2,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  CheckCircle2, AlertTriangle, XCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
+import { useSales } from "@/hooks/useSales";
 
 type SortField = "id" | "saleDate" | "revenue" | "netProfit" | "grossProfit";
 type SortDir = "asc" | "desc";
@@ -121,7 +123,14 @@ export default function SalesPage() {
   const canEdit = user?.role === "admin" || user?.role === "editor";
   const navigate = useNavigate();
 
-  const [sales, setSales] = useState<Sale[]>(mockSales);
+  const {
+    sales,
+    isLoading,
+    isError,
+    createSale,
+    updateSale,
+    deleteSale,
+  } = useSales();
   const [search, setSearch] = useState("");
   const [deliveryFilter, setDeliveryFilter] = useState<string>("all");
   const [retailerFilter, setRetailerFilter] = useState<string>("all");
@@ -294,11 +303,12 @@ export default function SalesPage() {
     setForm((prev) => ({ ...prev, saleId: nextId }));
   }, [dialogOpen, editingSale, form.saleDate, sales]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.retailerId || !form.productName || !form.quantity || !form.sellingPrice) return;
     const id = editingSale?.id ?? form.saleId;
-    const sale: Sale = {
+    const sale = {
       id,
+      uuid: editingSale?.uuid,
       retailerId: form.retailerId,
       productName: form.productName,
       productType: form.productType,
@@ -311,19 +321,29 @@ export default function SalesPage() {
       deliveryStatus: form.deliveryStatus,
       saleDate: form.saleDate,
       warrantyDays: parseInt(form.warrantyDays) || 0,
-    };
-    if (editingSale) {
-      setSales((prev) => prev.map((s) => (s.id === editingSale.id ? sale : s)));
-    } else {
-      setSales((prev) => [sale, ...prev]);
+    } as Sale;
+
+    try {
+      if (editingSale && editingSale.uuid) {
+        await updateSale.mutateAsync({ uuid: editingSale.uuid, updates: sale });
+      } else {
+        await createSale.mutateAsync(sale);
+      }
+      setForm(emptyForm);
+      setEditingSale(null);
+      setDialogOpen(false);
+    } catch (e) {
+      console.error("Failed to save sale", e);
     }
-    setForm(emptyForm);
-    setEditingSale(null);
-    setDialogOpen(false);
   };
 
-  const handleDeleteSale = (id: string) => {
-    setSales((prev) => prev.filter((s) => s.id !== id));
+  const handleDeleteSale = async (uuid?: string) => {
+    if (!uuid) return;
+    try {
+      await deleteSale.mutateAsync(uuid);
+    } catch (e) {
+      console.error("Failed to delete sale", e);
+    }
   };
 
   const metricCards = [
@@ -334,6 +354,27 @@ export default function SalesPage() {
     { label: "Pending", value: metrics.pending.toString(), icon: Clock, sub: "sales" },
     { label: "Refunded", value: metrics.refunded.toString(), icon: RotateCcw, sub: "sales" },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+          <h2 className="text-lg font-semibold">Error Loading Sales</h2>
+        </div>
+        <p className="text-muted-foreground">Failed to fetch sales data. Please check your connection or RLS policies.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -739,7 +780,7 @@ export default function SalesPage() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    onClick={() => handleDeleteSale(sl.id)}
+                                    onClick={() => handleDeleteSale(sl.uuid)}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
