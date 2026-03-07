@@ -194,7 +194,6 @@ const SettingsPage = () => {
           <Select value={form.role ?? "viewer"} onValueChange={v => updateForm("role", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="editor">Editor</SelectItem>
               <SelectItem value="viewer">Viewer</SelectItem>
             </SelectContent>
@@ -583,7 +582,7 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Password</TableHead><TableHead>Status</TableHead>
+                  <TableHead>Name</TableHead><TableHead>Username</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredUsers.map(u => {
@@ -617,6 +616,11 @@ const SettingsPage = () => {
                               </button>
                             </div>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {u.role}
+                          </Badge>
                         </TableCell>
                         <TableCell><Badge variant={u.active ? "default" : "secondary"}>{u.active ? "Active" : "Inactive"}</Badge></TableCell>
                         {isAdmin && (

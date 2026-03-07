@@ -35,14 +35,21 @@ const Login = () => {
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
             <Package className="h-6 w-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">JedOMS</CardTitle>
+          <CardTitle className="text-2xl">Hotmama OMS</CardTitle>
           <CardDescription>Operations Management System</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Username</Label>
-              <Input id="email" type="text" placeholder="jedzcartas06" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input
+                id="email"
+                type="text"
+                placeholder="Enter your username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -52,9 +59,6 @@ const Login = () => {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              Demo: jedzcartas06 / jdzelevatech2026!
-            </p>
           </form>
         </CardContent>
       </Card>

@@ -39,13 +39,22 @@ import { cn } from "@/lib/utils";
 type SortKey = "id" | "amount" | "dueDate";
 type SortDir = "asc" | "desc";
 
-const AGENT_PIE_COLORS = ["hsl(160, 60%, 45%)", "hsl(40, 90%, 50%)"];
-const RETAILER_PIE_COLORS = ["hsl(220, 70%, 55%)", "hsl(340, 65%, 55%)"];
+const AGENT_PIE_COLORS = [
+  "hsl(160, 60%, 45%)",
+  "hsl(40, 90%, 50%)",
+  "hsl(340, 65%, 55%)",
+];
+const RETAILER_PIE_COLORS = [
+  "hsl(220, 70%, 55%)",
+  "hsl(40, 90%, 50%)",
+  "hsl(160, 60%, 45%)",
+  "hsl(340, 65%, 55%)",
+];
 
 const agentPayBadge: Record<PayStatus, { label: string; cls: string }> = {
   paid: { label: "Paid", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
   unpaid: { label: "Unpaid", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
-  overdue: { label: "Overdue", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
+  overdue: { label: "Canceled", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
 };
 
 const retailerPayBadge: Record<RetailerPayStatus, { label: string; cls: string }> = {
@@ -165,30 +174,33 @@ const PaymentsPage = () => {
   const retailerPayments = filterAndSort("retailer");
 
   const metrics = useMemo(() => {
-    const agents = visiblePayments.filter(p => p.type === "agent");
-    const retailers = visiblePayments.filter(p => p.type === "retailer");
+    const agents = visiblePayments.filter((p) => p.type === "agent");
+    const retailers = visiblePayments.filter((p) => p.type === "retailer");
 
-    const agentFeesTotal = agents
-      .filter(p => p.status === "unpaid" || p.status === "paid")
-      .reduce((s, p) => s + p.amount, 0);
+    const agentTotal = agents.reduce((s, p) => s + p.amount, 0);
+    const agentPaid = agents.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
+    const agentUnpaid = agents.filter((p) => p.status === "unpaid").reduce((s, p) => s + p.amount, 0);
+    const agentCanceled = agents.filter((p) => p.status === "overdue").reduce((s, p) => s + p.amount, 0);
 
-    const agentFeesPaid = agents
-      .filter(p => p.status === "paid")
-      .reduce((s, p) => s + p.amount, 0);
+    const retailerUnsold = retailers.filter((p) => p.status === "unsold").reduce((s, p) => s + p.amount, 0);
+    const retailerPending = retailers.filter((p) => p.status === "pending").reduce((s, p) => s + p.amount, 0);
+    const retailerSold = retailers.filter((p) => p.status === "sold").reduce((s, p) => s + p.amount, 0);
+    const retailerRefunded = retailers.filter((p) => p.status === "refunded").reduce((s, p) => s + p.amount, 0);
 
-    const retailerReceivables = retailers
-      .filter(p => p.status === "pending" || p.status === "sold")
-      .reduce((s, p) => s + p.amount, 0);
-
-    const retailerCollected = retailers
-      .filter(p => p.status === "sold")
-      .reduce((s, p) => s + p.amount, 0);
+    const retailerReceivables = retailerPending + retailerSold;
+    const retailerCollected = retailerSold;
 
     return {
-      agentTotal: agentFeesTotal,
-      agentPaid: agentFeesPaid,
-      retailerTotal: retailerReceivables,
-      retailerPaid: retailerCollected,
+      agentTotal,
+      agentPaid,
+      agentUnpaid,
+      agentCanceled,
+      retailerUnsold,
+      retailerPending,
+      retailerSold,
+      retailerRefunded,
+      retailerReceivables,
+      retailerCollected,
     };
   }, [visiblePayments]);
 
@@ -352,8 +364,8 @@ const PaymentsPage = () => {
   const metricCards = [
     { title: "Agent Fees Total", value: formatCurrency(metrics.agentTotal), icon: DollarSign },
     { title: "Agent Fees Paid", value: formatCurrency(metrics.agentPaid), icon: CheckCircle2 },
-    { title: "Retailer Receivables", value: formatCurrency(metrics.retailerTotal), icon: DollarSign },
-    { title: "Retailer Collected", value: formatCurrency(metrics.retailerPaid), icon: CheckCircle2 },
+    { title: "Retailer Receivables", value: formatCurrency(metrics.retailerReceivables), icon: DollarSign },
+    { title: "Retailer Collected", value: formatCurrency(metrics.retailerCollected), icon: CheckCircle2 },
   ];
 
   return (
@@ -372,7 +384,7 @@ const PaymentsPage = () => {
                   m.title === "Agent Fees Paid" &&
                     (metrics.agentPaid === metrics.agentTotal ? "text-emerald-500" : "text-amber-500"),
                   m.title === "Retailer Collected" &&
-                    (metrics.retailerPaid === metrics.retailerTotal ? "text-emerald-500" : "text-amber-500"),
+                    (metrics.retailerCollected === metrics.retailerReceivables ? "text-emerald-500" : "text-amber-500"),
                 )}
               >
                 {m.value}
@@ -471,7 +483,8 @@ const PaymentsPage = () => {
                 <Pie
                   data={[
                     { name: "Paid", value: metrics.agentPaid },
-                    { name: "Unpaid", value: Math.max(metrics.agentTotal - metrics.agentPaid, 0) },
+                    { name: "Unpaid", value: metrics.agentUnpaid },
+                    { name: "Canceled", value: metrics.agentCanceled },
                   ]}
                   dataKey="value"
                   nameKey="name"
@@ -481,8 +494,9 @@ const PaymentsPage = () => {
                   outerRadius={90}
                   paddingAngle={4}
                 >
-                  <Cell fill={AGENT_PIE_COLORS[0]} />
-                  <Cell fill={AGENT_PIE_COLORS[1]} />
+                  {[metrics.agentPaid, metrics.agentUnpaid, metrics.agentCanceled].map((_, idx) => (
+                    <Cell key={idx} fill={AGENT_PIE_COLORS[idx % AGENT_PIE_COLORS.length]} />
+                  ))}
                 </Pie>
                 <RechartsTooltip
                   formatter={(value: number) => formatCurrency(value)}
@@ -501,8 +515,10 @@ const PaymentsPage = () => {
               <PieChart>
                 <Pie
                   data={[
-                    { name: "Collected", value: metrics.retailerPaid },
-                    { name: "Pending", value: Math.max(metrics.retailerTotal - metrics.retailerPaid, 0) },
+                    { name: "Unsold", value: metrics.retailerUnsold },
+                    { name: "Pending", value: metrics.retailerPending },
+                    { name: "Sold", value: metrics.retailerSold },
+                    { name: "Refunded", value: metrics.retailerRefunded },
                   ]}
                   dataKey="value"
                   nameKey="name"
@@ -512,8 +528,14 @@ const PaymentsPage = () => {
                   outerRadius={90}
                   paddingAngle={4}
                 >
-                  <Cell fill={RETAILER_PIE_COLORS[0]} />
-                  <Cell fill={RETAILER_PIE_COLORS[1]} />
+                  {[
+                    metrics.retailerUnsold,
+                    metrics.retailerPending,
+                    metrics.retailerSold,
+                    metrics.retailerRefunded,
+                  ].map((_, idx) => (
+                    <Cell key={idx} fill={RETAILER_PIE_COLORS[idx % RETAILER_PIE_COLORS.length]} />
+                  ))}
                 </Pie>
                 <RechartsTooltip
                   formatter={(value: number) => formatCurrency(value)}
@@ -567,16 +589,16 @@ const PaymentsPage = () => {
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="unpaid">Unpaid</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="unsold">Unsold</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="sold">Sold</SelectItem>
-                <SelectItem value="refunded">Refunded</SelectItem>
-              </SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="unpaid">Unpaid</SelectItem>
+                  <SelectItem value="overdue">Canceled</SelectItem>
+                  <SelectItem value="unsold">Unsold</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="sold">Sold</SelectItem>
+                  <SelectItem value="refunded">Refunded</SelectItem>
+                </SelectContent>
             </Select>
           </div>
 
@@ -676,7 +698,7 @@ const PaymentsPage = () => {
                     <>
                       <SelectItem value="paid">Paid</SelectItem>
                       <SelectItem value="unpaid">Unpaid</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
+                      <SelectItem value="overdue">Canceled</SelectItem>
                     </>
                   ) : (
                     <>

@@ -181,9 +181,9 @@ export interface MockUser {
 }
 
 export const mockUsers: MockUser[] = [
-  { id: "1", name: "Jed Santos", email: "jedzcartas06", password: "jdzelevatech2026!", role: "admin", active: true },
+  { id: "1", name: "Jed Santos", email: "jedzcartas06", password: "jdzelevatech2026!", role: "editor", active: true },
   { id: "2", name: "Meg Bae", email: "megbae29", password: "jdzelevatech2026!", role: "editor", active: true },
-  { id: "3", name: "Mae Mae", email: "maemae30", password: "jdzelevatech2026!", role: "viewer", active: true },
+  { id: "3", name: "Mae Mae", email: "maemae30", password: "jdzelevatech2026!", role: "editor", active: true },
 ];
 
 // ============ HELPERS ============

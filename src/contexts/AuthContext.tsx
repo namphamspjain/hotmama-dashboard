@@ -18,9 +18,9 @@ interface AuthContextType {
 }
 
 const mockUsers: Record<string, User & { password: string }> = {
-  jedzcartas06: { id: "1", name: "Jed Santos", email: "jedzcartas06", role: "admin", password: "jdzelevatech2026!" },
+  jedzcartas06: { id: "1", name: "Jed Santos", email: "jedzcartas06", role: "editor", password: "jdzelevatech2026!" },
   megbae29: { id: "2", name: "Meg Bae", email: "megbae29", role: "editor", password: "jdzelevatech2026!" },
-  maemae30: { id: "3", name: "Mae Mae", email: "maemae30", role: "viewer", password: "jdzelevatech2026!" },
+  maemae30: { id: "3", name: "Mae Mae", email: "maemae30", role: "editor", password: "jdzelevatech2026!" },
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

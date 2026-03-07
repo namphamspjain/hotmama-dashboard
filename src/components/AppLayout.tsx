@@ -43,7 +43,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const overdueCount = getOverduePaymentsCount();
 
-  const currentTitle = navItems.find((n) => n.path === location.pathname)?.title ?? "JedOMS";
+  const currentTitle = navItems.find((n) => n.path === location.pathname)?.title ?? "Hotmama OMS";
   const initials = user?.name
     ? user.name
         .split(" ")
@@ -71,7 +71,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
           <Package className="h-6 w-6 shrink-0 text-sidebar-primary" />
-          {!collapsed && <span className="text-lg font-bold text-sidebar-primary">JedOMS</span>}
+          {!collapsed && <span className="text-lg font-bold text-sidebar-primary">Hotmama OMS</span>}
         </div>
 
         {/* Nav + user profile */}

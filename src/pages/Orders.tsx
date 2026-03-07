@@ -69,15 +69,6 @@ const payBadge: Record<PayStatus, { label: string; cls: string }> = {
   overdue: { label: "Overdue", cls: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300" },
 };
 
-const getUnitPricePhp = (o: Order): number => {
-  return o.quantity > 0 ? Math.round(o.importCostPhp / o.quantity) : 0;
-};
-
-const getImportCostPhpFromUnit = (o: Order): number => {
-  const unit = getUnitPricePhp(o);
-  return unit * o.quantity;
-};
-
 const formatShortDate = (value?: string) => {
   if (!value) return "—";
   const d = new Date(value);
@@ -93,8 +84,14 @@ const formatYuan = (amount: number): string => {
 };
 
 const emptyForm = {
-  supplierId: "", agentId: "", productType: "", productName: "",
-  quantity: "", importUnitPriceYuan: "", exchangeRate: "7.8",
+  supplierId: "",
+  agentId: "",
+  productType: "",
+  productName: "",
+  quantity: "",
+  importUnitPriceYuan: "",
+  importCostPhp: "",
+  exchangeRate: "7.8",
   shippingFee: "",
   shippingStatus: "shipping" as ShippingStatus,
   payStatus: "unpaid" as PayStatus,
@@ -145,12 +142,11 @@ export default function OrdersPage() {
     const totalPurchased = visibleOrders.reduce((s, o) => s + o.quantity, 0);
     const shipping = visibleOrders.filter((o) => o.shippingStatus === "shipping").length;
     const received = visibleOrders.filter((o) => o.shippingStatus === "received").length;
-    const totalImportCost = visibleOrders.reduce((s, o) => s + getImportCostPhpFromUnit(o), 0);
+    const totalImportCost = visibleOrders.reduce((s, o) => s + o.importCostPhp, 0);
     const totalShippingFees = visibleOrders.reduce((s, o) => s + (o.shippingFee ?? 0), 0);
     const totalAgentFees = visibleOrders.reduce((s, o) => {
       const agt = agents.find((a) => a.id === o.agentId);
-      const baseImport = getImportCostPhpFromUnit(o);
-      return s + (agt ? baseImport * (agt.feePercent / 100) : 0);
+      return s + (agt ? o.importCostPhp * (agt.feePercent / 100) : 0);
     }, 0);
     return { totalPurchased, shipping, received, totalImportCost, totalShippingFees, totalAgentFees };
   }, [visibleOrders]);
@@ -182,7 +178,7 @@ export default function OrdersPage() {
       if (sortField === "id") cmp = a.id.localeCompare(b.id);
       else if (sortField === "orderDate") cmp = a.orderDate.localeCompare(b.orderDate);
       else if (sortField === "quantity") cmp = a.quantity - b.quantity;
-      else if (sortField === "importCostPhp") cmp = getImportCostPhpFromUnit(a) - getImportCostPhpFromUnit(b);
+      else if (sortField === "importCostPhp") cmp = a.importCostPhp - b.importCostPhp;
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
@@ -198,14 +194,6 @@ export default function OrdersPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  // calculated cost in form
-  const calcCost = useMemo(() => {
-    const qty = parseFloat(form.quantity) || 0;
-    const price = parseFloat(form.importUnitPriceYuan) || 0;
-    const rate = parseFloat(form.exchangeRate) || 0; // PHP per ¥
-    return rate > 0 ? Math.round(qty * price * rate) : 0;
-  }, [form.quantity, form.importUnitPriceYuan, form.exchangeRate]);
-
   const handleSubmit = () => {
     if (!form.supplierId || !form.agentId || !form.productName || !form.quantity) return;
     const dateStr = form.orderDate.replace(/-/g, "");
@@ -220,7 +208,7 @@ export default function OrdersPage() {
       quantity: parseInt(form.quantity),
       importUnitPriceYuan: parseFloat(form.importUnitPriceYuan),
       exchangeRate: parseFloat(form.exchangeRate),
-      importCostPhp: calcCost,
+      importCostPhp: Math.round(parseFloat(form.importCostPhp) || 0),
       shippingFee: Math.round(parseFloat(form.shippingFee) || 0),
       shippingStatus: form.shippingStatus,
       payStatus: form.payStatus,
@@ -535,7 +523,7 @@ export default function OrdersPage() {
                   ];
                   const rows = filtered.map((o) => {
                     const unitPriceYuan = o.importUnitPriceYuan;
-                    const importCost = getImportCostPhpFromUnit(o);
+                    const importCost = o.importCostPhp;
                     return [
                       o.id,
                       getSupplierName(o.supplierId),
@@ -675,7 +663,7 @@ export default function OrdersPage() {
                     const sb = shippingBadge[o.shippingStatus];
                     const pb = payBadge[o.payStatus];
                     const unitPriceYuan = o.importUnitPriceYuan;
-                    const importCost = getImportCostPhpFromUnit(o);
+                    const importCost = o.importCostPhp;
                     const receivalDisplay = formatShortDate(o.receivalDate);
                     return (
                       <TableRow
@@ -722,8 +710,9 @@ export default function OrdersPage() {
                                       productName: o.productName,
                                       quantity: String(o.quantity),
                                       importUnitPriceYuan: String(o.importUnitPriceYuan),
+                                      importCostPhp: String(o.importCostPhp),
                                       exchangeRate: String(o.exchangeRate),
-                                  shippingFee: String(o.shippingFee ?? 0),
+                                      shippingFee: String(o.shippingFee ?? 0),
                                       shippingStatus: o.shippingStatus,
                                       payStatus: o.payStatus,
                                       orderDate: o.orderDate,
@@ -773,7 +762,7 @@ export default function OrdersPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New Order</DialogTitle>
-            <DialogDescription>Fill in the order details. Import cost is calculated automatically.</DialogDescription>
+            <DialogDescription>Fill in the order details.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -844,6 +833,19 @@ export default function OrdersPage() {
                 />
               </div>
               <div className="space-y-1.5">
+                <Label>Import Cost (₱)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.importCostPhp}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, importCostPhp: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
                 <Label className="flex items-center justify-between">
                   <span>Exchange Rate (₱ / ¥)</span>
                   <Button
@@ -873,15 +875,8 @@ export default function OrdersPage() {
                 )}
               </div>
             </div>
-            {/* Live cost preview */}
-            <div className="rounded-md bg-muted p-3 text-center">
-              <p className="text-xs text-muted-foreground mb-1">
-                Estimated Import Cost
-              </p>
-              <p className="text-2xl font-bold">{formatCurrency(calcCost)}</p>
-            </div>
             <div className="space-y-1.5">
-              <Label>Shipping Fee (₱)</Label>
+              <Label>Shipping Fee (₱) (optional)</Label>
               <Input
                 type="number"
                 min="0"
