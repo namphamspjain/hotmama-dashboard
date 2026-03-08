@@ -62,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+
   useEffect(() => {
     // Failsafe timer: force stop loading after 3 seconds no matter what
     const failsafeTimer = setTimeout(() => {
@@ -71,16 +72,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // 1. Check active session on mount
     const initSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+      try {        const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
         
         if (session?.user) {
           const u = await fetchUserProfile(session.user.id, session.user.email || "");
           setUser(u);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error checking session:", err);
+        // On invalid refresh token or session error, forcefully sign out
+        if (err?.name === 'AuthApiError' || err?.message?.includes('Refresh Token')) {
+          await supabase.auth.signOut().catch(() => {});
+          window.location.href = '/login';
+        }
       } finally {
         clearTimeout(failsafeTimer);
         setLoading(false);
@@ -89,12 +94,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initSession();
 
     // 2. Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {      if (event === "SIGNED_IN" && session?.user) {
         const u = await fetchUserProfile(session.user.id, session.user.email || "");
         setUser(u);
       } else if (event === "SIGNED_OUT") {
         setUser(null);
+        window.location.href = "/login";
+      } else if (event === "TOKEN_REFRESHED" && session?.user) {
+        // Token was refreshed, ensure user profile is synced
+        const u = await fetchUserProfile(session.user.id, session.user.email || "");
+        setUser(u);
+      } else if (event === "INITIAL_SESSION" && !session) {
+        // No active session found on initial load
+        setUser(null);
+        // Prevent redirecting the entire app if they are already on /login or if public routes exist.
+        // But if they are purely internal routes, a redirect here might be too aggressive over ProtectedRoute.
       }
     });
 
@@ -103,22 +117,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    // 1. HARDCODED FALLBACK (Emergency Admin Access)
-    // Check this FIRST so we don't wait 8 seconds for a timeout!
-    if (email === "jhedzcartas@gmail.com" && password === "jdzelevatech2026!") {
-      console.log("Using hardcoded emergency fallback for admin (Fast path).");
-      const fallbackAdmin: User = {
-        id: "fallback-admin-999",
-        email: "jhedzcartas@gmail.com",
-        name: "Jed Santos (Fallback)",
-        role: "admin",
-      };
-      setUser(fallbackAdmin);
-      return true;
-    }
-
-    try {
+  const login = useCallback(async (email: string, password: string) => {    try {
+      console.log("Attempting login via Supabase with:", email);
       // 2. Race against an 8-second timeout for Supabase Auth
       const loginPromise = supabase.auth.signInWithPassword({ email, password });
       const timeoutPromise = new Promise<{ error: Error }>((_, reject) => 
@@ -126,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
 
       const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
+      console.log("Supabase login response:", {data, error});
 
       if (!error && data?.session?.user) {
         return true;
@@ -141,12 +142,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // If it's the fallback user, just clear local state
-    if (user?.id === "fallback-admin-999") {
-      setUser(null);
-      window.location.href = "/login";
-      return;
-    }
     await supabase.auth.signOut();
     window.location.href = "/login";
   }, [user]);

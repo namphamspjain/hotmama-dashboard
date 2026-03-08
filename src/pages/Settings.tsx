@@ -156,13 +156,14 @@ const SettingsPage = () => {
       } else {
         await updateUser.mutateAsync({
           id: form.id,
-          updates: { name: form.name, role: form.role },
-        })
+          updates: { name: form.name, role: form.role, avatar: form.avatar },
+        });
       }
       
       if (user && form.id === String(user.id)) {
         updateProfile({ name: form.name, avatar: form.avatar });
       }
+      setSearch("");
       setDialog(null);
     } catch (err: any) {
       alert(err.message || 'Error saving user');
@@ -299,7 +300,14 @@ const SettingsPage = () => {
       {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search partners or users…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+        <Input 
+          placeholder="Search partners or users…" 
+          className="pl-9" 
+          value={search} 
+          onChange={e => setSearch(e.target.value)} 
+          autoComplete="off"
+          name="hotmama_search_blocker"
+        />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -648,7 +656,12 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead className="w-16">Photo</TableHead><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
+                  <TableHead className="w-20">Photo</TableHead>
+                  <TableHead className="w-[30%]">Name</TableHead>
+                  <TableHead className="w-[30%]">Email</TableHead>
+                  <TableHead className="w-32">Role</TableHead>
+                  <TableHead className="w-32">Status</TableHead>
+                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredUsers.map(u => {

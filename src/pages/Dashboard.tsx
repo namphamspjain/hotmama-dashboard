@@ -265,34 +265,13 @@ const DashboardPage = () => {
     window.localStorage.setItem(CHART_STORAGE_KEY, JSON.stringify(selectedCharts));
   }, [selectedCharts]);
 
-  const { orders = [], isLoading: ordersLoading, isError: ordersError } = useOrders();
-  const { inventory = [], isLoading: inventoryLoading, isError: inventoryError } = useInventory();
-  const { sales = [], isLoading: salesLoading, isError: salesError } = useSales();
-  const { payments = [], isLoading: paymentsLoading, isError: paymentsError } = usePayments();
+  const { orders = [], isLoading: ordersLoading, isError: ordersIsError, error: ordersError } = useOrders();
+  const { inventory = [], isLoading: inventoryLoading, isError: inventoryIsError, error: inventoryError } = useInventory();
+  const { sales = [], isLoading: salesLoading, isError: salesIsError, error: salesError } = useSales();
+  const { payments = [], isLoading: paymentsLoading, isError: paymentsIsError, error: paymentsError } = usePayments();
 
   const isLoading = ordersLoading || inventoryLoading || salesLoading || paymentsLoading;
-  const isError = ordersError || inventoryError || salesError || paymentsError;
-
-  if (isLoading) {
-    return (
-      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertTriangle className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">Error Loading Dashboard</h2>
-        </div>
-        <p className="text-muted-foreground">Failed to fetch data from Supabase. Please check your connection or RLS policies.</p>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
-      </div>
-    );
-  }
+  const isError = ordersIsError || inventoryIsError || salesIsError || paymentsIsError;
 
   // Filter datasets by date range
   const visibleOrders = useMemo(() => {
@@ -857,6 +836,33 @@ const statusColor: Record<string, string> = {
       return [...base, ...toAdd];
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+          <h2 className="text-lg font-semibold">Error Loading Dashboard</h2>
+        </div>
+        <p className="text-muted-foreground">Failed to fetch data from Supabase. Please check your connection or RLS policies.</p>
+        <p className="text-sm font-mono mt-2 p-2 bg-muted rounded-md max-w-2xl text-center text-red-500 overflow-auto">
+          Orders Error: {ordersError?.message || String(ordersError)}<br/>
+          Inventory Error: {inventoryError?.message || String(inventoryError)}<br/>
+          Sales Error: {salesError?.message || String(salesError)}<br/>
+          Payments Error: {paymentsError?.message || String(paymentsError)}
+        </p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

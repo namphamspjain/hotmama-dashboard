@@ -119,6 +119,7 @@ const PaymentsPage = () => {
     payments: data,
     isLoading,
     isError,
+    error,
     createPayment,
     updatePayment,
     deletePayment,
@@ -333,6 +334,9 @@ const PaymentsPage = () => {
           <h2 className="text-lg font-semibold">Error Loading Payments</h2>
         </div>
         <p className="text-muted-foreground">Failed to fetch payments data. Please check your connection or RLS policies.</p>
+        <p className="text-sm font-mono mt-2 p-2 bg-muted rounded-md text-red-500 overflow-auto">
+          {error?.message || String(error)}
+        </p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
     );

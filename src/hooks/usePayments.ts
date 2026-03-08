@@ -42,8 +42,7 @@ export const usePayments = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("payments")
-        .select("*")
-        .order("pay_date", { ascending: false });
+        .select("*");
 
       if (error) throw error;
       return (data || []).map(mapPaymentFromDB);

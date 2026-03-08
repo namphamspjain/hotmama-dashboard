@@ -1,7 +1,7 @@
 import { useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getPendingPaymentsCount } from "@/data/mock-data";
+import { usePayments } from "@/hooks/usePayments";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   PanelLeft,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +41,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pendingCount = getPendingPaymentsCount();
+  
+  const { payments } = usePayments();
+  const pendingCount = payments.filter(
+    (p) => (p.type === "retailer" && p.status === "pending") || (p.type === "agent" && p.status === "unpaid")
+  ).length;
 
   const currentTitle = navItems.find((n) => n.path === location.pathname)?.title ?? "Hotmama OMS";
   const initials = user?.name
@@ -69,7 +74,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <Package className="h-6 w-6 shrink-0 text-sidebar-primary" />
+          <Flame className="h-6 w-6 shrink-0 text-sidebar-primary" />
           {!collapsed && <span className="text-lg font-bold text-sidebar-primary">Hotmama OMS</span>}
         </div>
 
