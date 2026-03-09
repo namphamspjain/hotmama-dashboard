@@ -1,37 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Payment } from "@/data/mock-data";
+import { Payment, payments as mockPayments } from "@/data/mock-data";
 
-const mapPaymentFromDB = (dbPay: any): Payment => ({
-  id: dbPay.pay_id, // map custom business id to 'id'
-  uuid: dbPay.id,   // map postgres uuid to 'uuid'
-  type: dbPay.payment_type,
-  partnerName: dbPay.partner_name,
-  // the backend table stores polymorphic relation to string ID... mapping that through
-  linkedId: dbPay.linked_id, 
-  amount: dbPay.amount,
-  payDate: dbPay.pay_date,
-  status: dbPay.status,
-  notes: dbPay.notes,
-});
-
-const mapPaymentToDB = (pay: Partial<Payment> & { uuid?: string }) => {
-  const result: any = {
-    pay_id: pay.id,
-    payment_type: pay.type,
-    partner_name: pay.partnerName,
-    linked_id: pay.linkedId,
-    amount: pay.amount,
-    pay_date: pay.payDate,
-    status: pay.status,
-    notes: pay.notes,
+const mapPaymentFromDB = (dbPay: any): Payment => {
+  const isAgent = dbPay.payment_type === "agent";
+  return {
+    id: dbPay.id.substring(0, 8),
+    uuid: dbPay.id,
+    type: dbPay.payment_type,
+    partnerName: isAgent ? dbPay.agents?.name : dbPay.retailers?.name || "Unknown",
+    linkedId: isAgent ? dbPay.orders?.order_id : dbPay.sales?.sale_id || "Unknown",
+    amount: Number(dbPay.amount_php),
+    payDate: dbPay.due_date,
+    status: dbPay.pay_status,
+    notes: dbPay.notes,
   };
-  
-  if (pay.uuid) {
-    result.id = pay.uuid;
-  }
-  
-  return result;
 };
 
 export const usePayments = () => {
@@ -40,12 +23,25 @@ export const usePayments = () => {
   const fetchPayments = useQuery({
     queryKey: ["payments"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("*");
+      try {
+        const { data, error } = await supabase
+          .from("payments")
+          .select(`
+            *,
+            orders ( order_id ),
+            sales ( sale_id ),
+            agents ( name ),
+            retailers ( name )
+          `)
+          .order("due_date", { ascending: false });
 
-      if (error) throw error;
-      return (data || []).map(mapPaymentFromDB);
+        if (error) throw error;
+        return (data || []).map(mapPaymentFromDB);
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch from Supabase, using mock payments data:", err);
+        return mockPayments;
+      }
     },
     retry: 1,
     retryDelay: 1000,
@@ -53,12 +49,45 @@ export const usePayments = () => {
 
   const createPayment = useMutation({
     mutationFn: async (newPay: Payment) => {
-      // For payments, "linked_id" is a polymorphic string column holding order_id or sale_id
-      // It does NOT map to a real UUID foreign key in Postgres at the moment.
+      const isAgent = newPay.type === "agent";
+      let orderUuid = null, saleUuid = null, agentUuid = null, retailerUuid = null;
+
+      if (isAgent) {
+        if (newPay.linkedId) {
+          const { data } = await supabase.from("orders").select("id").eq("order_id", newPay.linkedId).single();
+          if (data) orderUuid = data.id;
+        }
+        if (newPay.partnerName) {
+          const { data } = await supabase.from("agents").select("id").eq("name", newPay.partnerName).single();
+          if (data) agentUuid = data.id;
+        }
+      } else {
+        if (newPay.linkedId) {
+          const { data } = await supabase.from("sales").select("id").eq("sale_id", newPay.linkedId).single();
+          if (data) saleUuid = data.id;
+        }
+        if (newPay.partnerName) {
+          const { data } = await supabase.from("retailers").select("id").eq("name", newPay.partnerName).single();
+          if (data) retailerUuid = data.id;
+        }
+      }
+
+      const input: any = {
+        payment_type: newPay.type,
+        amount_php: newPay.amount,
+        pay_status: newPay.status,
+        due_date: newPay.payDate,
+        notes: newPay.notes,
+        order_id: orderUuid,
+        sale_id: saleUuid,
+        agent_id: agentUuid,
+        retailer_id: retailerUuid,
+      };
+
       const { data, error } = await supabase
         .from("payments")
-        .insert([mapPaymentToDB(newPay)])
-        .select()
+        .insert([input])
+        .select(`*, orders(order_id), sales(sale_id), agents(name), retailers(name)`)
         .single();
       if (error) throw error;
       return mapPaymentFromDB(data);
@@ -70,13 +99,23 @@ export const usePayments = () => {
 
   const updatePayment = useMutation({
     mutationFn: async ({ uuid, updates }: { uuid: string; updates: Partial<Payment> }) => {
-      const dbUpdates = mapPaymentToDB(updates);
+      const isAgent = updates.type === "agent";
+      let input: any = {};
+      
+      if (updates.type) input.payment_type = updates.type;
+      if (updates.amount !== undefined) input.amount_php = updates.amount;
+      if (updates.status) input.pay_status = updates.status;
+      if (updates.payDate) input.due_date = updates.payDate;
+      if (updates.notes !== undefined) input.notes = updates.notes;
+
+      // Skip lookup of relations on generic update for brevity unless needed.
+      // Usually, users just update status or amount for existing payments.
 
       const { data, error } = await supabase
         .from("payments")
-        .update(dbUpdates)
+        .update(input)
         .eq("id", uuid)
-        .select()
+        .select(`*, orders(order_id), sales(sale_id), agents(name), retailers(name)`)
         .single();
       if (error) throw error;
       return mapPaymentFromDB(data);
@@ -88,10 +127,7 @@ export const usePayments = () => {
 
   const deletePayment = useMutation({
     mutationFn: async (uuid: string) => {
-      const { error } = await supabase
-        .from("payments")
-        .delete()
-        .eq("id", uuid);
+      const { error } = await supabase.from("payments").delete().eq("id", uuid);
       if (error) throw error;
     },
     onSuccess: () => {

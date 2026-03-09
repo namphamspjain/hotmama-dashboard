@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import React, { createContext, useContext, useState, useCallback } from "react";
+import { appUsers } from "@/data/users";
 
 export type UserRole = "admin" | "editor" | "viewer";
 
 export interface User {
   id: string;
   name: string;
-  email: string; // used as username in UI
+  email: string;
   role: UserRole;
   avatar?: string;
 }
@@ -23,131 +23,51 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => {
+    // Check if user is stored in localStorage on init
+    const savedUser = localStorage.getItem("appUser");
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+  const [loading, setLoading] = useState(false);
 
-  // Fetch role and details from user_profiles table
-  const fetchUserProfile = async (userId: string, email: string) => {
+  const login = useCallback(async (email: string, password: string) => {
+    setLoading(true);
     try {
-      const { data: profile, error } = await supabase
-        .from("user_profiles")
-        .select("role, full_name")
-        .eq("id", userId)
-        .single();
-
-      if (error || !profile) {
-        console.warn("Could not fetch user profile, defaulting to viewer", error);
-        return {
-          id: userId,
-          email,
-          name: email.split("@")[0],
-          role: "viewer" as UserRole,
+      // Check against hardcoded users
+      const foundUser = appUsers.find(u => u.email === email && u.password === password);
+      
+      if (foundUser) {
+        const user: User = {
+          id: foundUser.id,
+          email: foundUser.email,
+          name: foundUser.name,
+          role: foundUser.role,
+          avatar: foundUser.avatar,
         };
-      }
-
-      return {
-        id: userId,
-        email,
-        name: profile.full_name || email.split("@")[0],
-        role: profile.role as UserRole,
-      };
-    } catch (err) {
-      console.error("Exception fetching profile:", err);
-      return {
-        id: userId,
-        email,
-        name: email.split("@")[0],
-        role: "viewer" as UserRole,
-      };
-    }
-  };
-
-
-  useEffect(() => {
-    // Failsafe timer: force stop loading after 3 seconds no matter what
-    const failsafeTimer = setTimeout(() => {
-      console.warn("AuthContext session check timed out. Forcing unlock.");
-      setLoading(false);
-    }, 3000);
-
-    // 1. Check active session on mount
-    const initSession = async () => {
-      try {        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
-        if (session?.user) {
-          const u = await fetchUserProfile(session.user.id, session.user.email || "");
-          setUser(u);
-        }
-      } catch (err: any) {
-        console.error("Error checking session:", err);
-        // On invalid refresh token or session error, forcefully sign out
-        if (err?.name === 'AuthApiError' || err?.message?.includes('Refresh Token')) {
-          await supabase.auth.signOut().catch(() => {});
-          window.location.href = '/login';
-        }
-      } finally {
-        clearTimeout(failsafeTimer);
-        setLoading(false);
-      }
-    };
-    initSession();
-
-    // 2. Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {      if (event === "SIGNED_IN" && session?.user) {
-        const u = await fetchUserProfile(session.user.id, session.user.email || "");
-        setUser(u);
-      } else if (event === "SIGNED_OUT") {
-        setUser(null);
-        window.location.href = "/login";
-      } else if (event === "TOKEN_REFRESHED" && session?.user) {
-        // Token was refreshed, ensure user profile is synced
-        const u = await fetchUserProfile(session.user.id, session.user.email || "");
-        setUser(u);
-      } else if (event === "INITIAL_SESSION" && !session) {
-        // No active session found on initial load
-        setUser(null);
-        // Prevent redirecting the entire app if they are already on /login or if public routes exist.
-        // But if they are purely internal routes, a redirect here might be too aggressive over ProtectedRoute.
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
-  const login = useCallback(async (email: string, password: string) => {    try {
-      console.log("Attempting login via Supabase with:", email);
-      // 2. Race against an 8-second timeout for Supabase Auth
-      const loginPromise = supabase.auth.signInWithPassword({ email, password });
-      const timeoutPromise = new Promise<{ error: Error }>((_, reject) => 
-        setTimeout(() => reject(new Error("Sign in request timed out. Check network or keys.")), 8000)
-      );
-
-      const { data, error } = await Promise.race([loginPromise, timeoutPromise]) as any;
-      console.log("Supabase login response:", {data, error});
-
-      if (!error && data?.session?.user) {
+        setUser(user);
+        localStorage.setItem("appUser", JSON.stringify(user));
         return true;
       }
       
-      console.warn("Supabase login failed or timed out:", error?.message || error);
-    } catch (err: any) {
-      console.warn("Supabase login exception:", err.message || err);
+      return false;
+    } finally {
+      setLoading(false);
     }
-
-    // 3. If everything fails, report invalid login
-    return false;
   }, []);
 
-  const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+  const logout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem("appUser");
     window.location.href = "/login";
-  }, [user]);
+  }, []);
 
   const updateProfile = useCallback((data: Partial<User>) => {
-    setUser((prev) => (prev ? { ...prev, ...data } : prev));
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...data };
+      localStorage.setItem("appUser", JSON.stringify(updated));
+      return updated;
+    });
   }, []);
 
   return (

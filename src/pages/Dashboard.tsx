@@ -265,15 +265,15 @@ const DashboardPage = () => {
     window.localStorage.setItem(CHART_STORAGE_KEY, JSON.stringify(selectedCharts));
   }, [selectedCharts]);
 
-  const { orders = [], isLoading: ordersLoading, isError: ordersIsError, error: ordersError } = useOrders();
-  const { inventory = [], isLoading: inventoryLoading, isError: inventoryIsError, error: inventoryError } = useInventory();
-  const { sales = [], isLoading: salesLoading, isError: salesIsError, error: salesError } = useSales();
-  const { payments = [], isLoading: paymentsLoading, isError: paymentsIsError, error: paymentsError } = usePayments();
+  const { orders = [], isLoading: ordersLoading, isError: ordersError, error: ordersErrorObj } = useOrders();
+  const { inventory = [], isLoading: inventoryLoading, isError: inventoryError, error: inventoryErrorObj } = useInventory();
+  const { sales = [], isLoading: salesLoading, isError: salesError, error: salesErrorObj } = useSales();
+  const { payments = [], isLoading: paymentsLoading, isError: paymentsError, error: paymentsErrorObj } = usePayments();
 
   const isLoading = ordersLoading || inventoryLoading || salesLoading || paymentsLoading;
-  const isError = ordersIsError || inventoryIsError || salesIsError || paymentsIsError;
+  const isError = ordersError || inventoryError || salesError || paymentsError;
 
-  // Filter datasets by date range
+  // Filter datasets by date range - MUST BE CALLED BEFORE CONDITIONAL RENDER
   const visibleOrders = useMemo(() => {
     if (!dateRange.from && !dateRange.to) return orders;
     const fromTs = dateRange.from ? dateRange.from.setHours(0, 0, 0, 0) : null;
@@ -286,7 +286,7 @@ const DashboardPage = () => {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [dateRange.from, dateRange.to]);
+  }, [dateRange.from, dateRange.to, orders]);
 
   const visibleSales = useMemo(() => {
     if (!dateRange.from && !dateRange.to) return sales;
@@ -300,7 +300,7 @@ const DashboardPage = () => {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [dateRange.from, dateRange.to]);
+  }, [dateRange.from, dateRange.to, sales]);
 
   const visibleInventory = useMemo(() => {
     if (!dateRange.from && !dateRange.to) return inventory;
@@ -314,7 +314,7 @@ const DashboardPage = () => {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [dateRange.from, dateRange.to]);
+  }, [dateRange.from, dateRange.to, inventory]);
 
   const visiblePayments = useMemo(() => {
     if (!dateRange.from && !dateRange.to) return payments;
@@ -328,7 +328,7 @@ const DashboardPage = () => {
       if (toTs !== null && ts > toTs) return false;
       return true;
     });
-  }, [dateRange.from, dateRange.to]);
+  }, [dateRange.from, dateRange.to, payments]);
 
   /* ─── Metric helpers (from visible data) ─── */
   const {
@@ -443,7 +443,7 @@ const DashboardPage = () => {
       retailerReceivables,
       retailerCollected,
     };
-  }, [visibleOrders, visibleInventory, visibleSales, visiblePayments]);
+  }, [orders, visibleOrders, visibleInventory, visibleSales, visiblePayments]);
 
   /* ─── Chart data (from visible data) ─── */
   // Orders charts
@@ -837,29 +837,34 @@ const statusColor: Record<string, string> = {
     });
   };
 
-  if (isLoading) {
+  // Show loading/error state at the end, after all hooks have been called
+  if (isLoading || isError) {
     return (
-      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertTriangle className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">Error Loading Dashboard</h2>
+      <div className="p-8 space-y-4">
+        <h2 className="text-lg font-semibold">Dashboard Status</h2>
+        <div className="grid gap-2">
+          <div className="p-4 border rounded">
+            <h3>Orders</h3>
+            <p>Loading: {String(ordersLoading)}</p>
+            <p className={ordersError ? "text-red-500 font-bold" : ""}>Error: {ordersErrorObj?.message || String(ordersError)}</p>
+          </div>
+          <div className="p-4 border rounded">
+            <h3>Inventory</h3>
+            <p>Loading: {String(inventoryLoading)}</p>
+            <p className={inventoryError ? "text-red-500 font-bold" : ""}>Error: {inventoryErrorObj?.message || String(inventoryError)}</p>
+          </div>
+          <div className="p-4 border rounded">
+            <h3>Sales</h3>
+            <p>Loading: {String(salesLoading)}</p>
+            <p className={salesError ? "text-red-500 font-bold" : ""}>Error: {salesErrorObj?.message || String(salesError)}</p>
+          </div>
+          <div className="p-4 border rounded">
+            <h3>Payments</h3>
+            <p>Loading: {String(paymentsLoading)}</p>
+            <p className={paymentsError ? "text-red-500 font-bold" : ""}>Error: {paymentsErrorObj?.message || String(paymentsError)}</p>
+          </div>
         </div>
-        <p className="text-muted-foreground">Failed to fetch data from Supabase. Please check your connection or RLS policies.</p>
-        <p className="text-sm font-mono mt-2 p-2 bg-muted rounded-md max-w-2xl text-center text-red-500 overflow-auto">
-          Orders Error: {ordersError?.message || String(ordersError)}<br/>
-          Inventory Error: {inventoryError?.message || String(inventoryError)}<br/>
-          Sales Error: {salesError?.message || String(salesError)}<br/>
-          Payments Error: {paymentsError?.message || String(paymentsError)}
-        </p>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
+        {!isLoading && <Button onClick={() => window.location.reload()}>Retry</Button>}
       </div>
     );
   }

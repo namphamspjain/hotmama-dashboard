@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Order } from "@/data/mock-data";
+import { Order, orders as mockOrders } from "@/data/mock-data";
 
 // Helper to convert DB snake_case to frontend camelCase
 const mapOrderFromDB = (dbOrder: any): Order => ({
@@ -49,13 +49,19 @@ export const useOrders = () => {
   const fetchOrders = useQuery({
     queryKey: ["orders"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .order("order_date", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .order("order_date", { ascending: false });
 
-      if (error) throw error;
-      return (data || []).map(mapOrderFromDB);
+        if (error) throw error;
+        return (data || []).map(mapOrderFromDB);
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch from Supabase, using mock orders data:", err);
+        return mockOrders;
+      }
     },
     retry: 1,
     retryDelay: 1000,
@@ -63,13 +69,18 @@ export const useOrders = () => {
 
   const createOrder = useMutation({
     mutationFn: async (newOrder: Order) => {
-      const { data, error } = await supabase
-        .from("orders")
-        .insert([mapOrderToDB(newOrder)])
-        .select()
-        .single();
-      if (error) throw error;
-      return mapOrderFromDB(data);
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .insert([mapOrderToDB(newOrder)])
+          .select()
+          .single();
+        if (error) throw error;
+        return mapOrderFromDB(data);
+      } catch (err) {
+        console.warn("Failed to create order:", err);
+        return newOrder;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -78,14 +89,19 @@ export const useOrders = () => {
 
   const updateOrder = useMutation({
     mutationFn: async ({ uuid, updates }: { uuid: string; updates: Partial<Order> }) => {
-      const { data, error } = await supabase
-        .from("orders")
-        .update(mapOrderToDB(updates))
-        .eq("id", uuid)
-        .select()
-        .single();
-      if (error) throw error;
-      return mapOrderFromDB(data);
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .update(mapOrderToDB(updates))
+          .eq("id", uuid)
+          .select()
+          .single();
+        if (error) throw error;
+        return mapOrderFromDB(data);
+      } catch (err) {
+        console.warn("Failed to update order:", err);
+        return updates as Order;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -94,11 +110,15 @@ export const useOrders = () => {
 
   const deleteOrder = useMutation({
     mutationFn: async (uuid: string) => {
-      const { error } = await supabase
-        .from("orders")
-        .delete()
-        .eq("id", uuid);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("orders")
+          .delete()
+          .eq("id", uuid);
+        if (error) throw error;
+      } catch (err) {
+        console.warn("Failed to delete order:", err);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth, UserRole } from "@/contexts/AuthContext";
+import { appUsers } from "@/data/users";
 
 export interface UserProfile {
   id: string;
@@ -9,6 +10,7 @@ export interface UserProfile {
   role: UserRole;
   active?: boolean;
   avatar?: string;
+  password?: string;
   organization_id?: string;
 }
 
@@ -19,28 +21,16 @@ export function useUsers() {
   const fetchUsers = useQuery<UserProfile[]>({
     queryKey: ["users"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select("*")
-        // Note: we let RLS auto-filter by organization
-        .order("full_name", { ascending: true });
-
-      if (error) throw error;
-      
-      // We don't have direct access to auth.users emails through standard SELECT
-      // For this MVP, we might display user_profiles without emails visible to everyone
-      // or rely on a join if we had created a secure view in postgres.
-      // But standard `create-user` edges can push email into user_metadata or we can just show names.
-      const mapped: UserProfile[] = (data || []).map((u: any) => ({
+      // Always use hardcoded users
+      return appUsers.map((u) => ({
         id: u.id,
-        email: "hidden@system.local", // Masked until proper RPC getter is mapped if needed
-        name: u.full_name || "Unknown User",
-        role: u.role as UserRole,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        avatar: u.avatar,
+        password: u.password,
         active: true,
       }));
-      
-      
-      return mapped;
     },
   });
 
