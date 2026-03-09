@@ -120,7 +120,6 @@ const PaymentsPage = () => {
     isLoading,
     isError,
     error,
-    error,
     createPayment,
     updatePayment,
     deletePayment,

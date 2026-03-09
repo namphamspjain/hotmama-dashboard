@@ -31,9 +31,6 @@ export function useUsers() {
         password: u.password,
         active: true,
       }));
-      
-      
-      return mapped;
     },
   });
 
