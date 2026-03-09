@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Flame, Eye, EyeOff } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Flame, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const { login, isAuthenticated, loading: authLoading } = useAuth();
@@ -14,8 +16,21 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Check local storage for remembered credentials
+    const savedEmail = localStorage.getItem("hotmama_remembered_email");
+    const savedPassword = localStorage.getItem("hotmama_remembered_password");
+    if (savedEmail && savedPassword) {
+      setEmail(savedEmail);
+      setPassword(savedPassword);
+      setRememberMe(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
@@ -37,6 +52,7 @@ const Login = () => {
     setLoading(true);
     const success = await login(email, password);
     setLoading(false);
+
     if (success) {
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", email);
@@ -83,6 +99,53 @@ const Login = () => {
             </div>
             <h1 className="mt-8 text-3xl font-bold tracking-tight text-foreground">Welcome Back hotmamas!</h1>
           </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-11 transition-all focus-visible:ring-2"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-11 pr-10 transition-all focus-visible:ring-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center rounded-r-md outline-offset-2"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              />
+              <Label htmlFor="remember" className="text-sm font-normal cursor-pointer select-none">
+                Remember me
+              </Label>
 
           <form onSubmit={handleSubmit} className="mt-10 space-y-6">
             <div className="space-y-5">

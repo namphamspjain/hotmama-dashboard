@@ -31,23 +31,24 @@ export function useUsers() {
         password: u.password,
         active: true,
       }));
+      
+      
+      return mapped;
     },
   });
 
   const createUser = useMutation({
-    mutationFn: async (payload: { email: string; password?: string; name: string; role: UserRole }) => {
-      // Invoke the Edge Function created to securely bypass admin auth creation
-      const { data, error } = await supabase.functions.invoke("create-user", {
-        body: {
-          email: payload.email,
-          password: payload.password || "hotmama2026!", // Default fallback password if none set
-          full_name: payload.name,
-          role: payload.role,
-        },
+    mutationFn: async (payload: { email: string; password?: string; name: string; role: UserRole; avatar?: string }) => {
+      // Use the newly created Postgres RPC function to securely bypass the missing edge function
+      const { data, error } = await supabase.rpc("create_new_user", {
+        email: payload.email,
+        password: payload.password || "hotmama2026!", // Default fallback password if none set
+        full_name: payload.name,
+        role: payload.role,
       });
 
-      if (error || data?.error) {
-        throw new Error(error?.message || data?.error || "Failed to create user via Edge Function");
+      if (error) {
+        throw new Error(error.message || "Failed to create user via RPC");
       }
       return data;
     },
@@ -58,7 +59,7 @@ export function useUsers() {
 
   const updateUser = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<UserProfile> }) => {
-      // Note: Only updating profile fields (name, role). Changing emails/passwords 
+      // Note: Only updating profile fields (name, role). Changing emails/passwords
       // requires another Edge Function or Admin API call.
       const { data, error } = await supabase
         .from("user_profiles")
