@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { Supplier, Agent, Warehouse, Retailer } from "@/data/mock-data";
+import { Supplier, Agent, Warehouse, Retailer, suppliers as mockSuppliers, agents as mockAgents, warehouses as mockWarehouses, retailers as mockRetailers } from "@/data/mock-data";
 
 export function usePartners() {
   const queryClient = useQueryClient();
@@ -10,22 +10,28 @@ export function usePartners() {
   const { data: suppliers = [], isLoading: loadingSuppliers } = useQuery<Supplier[]>({
     queryKey: ["suppliers"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("suppliers")
-        .select("*")
-        .is("deleted_at", null)
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return (data || []).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        contactPerson: s.contact_person || "",
-        phone: s.phone || "",
-        email: s.email || "",
-        address: s.address || "",
-        socialUrl: s.social_channel_url || "",
-        shippingFee: Number(s.shipping_fee_rmb || 0),
-      }));
+      try {
+        const { data, error } = await supabase
+          .from("suppliers")
+          .select("*")
+          .is("deleted_at", null)
+          .order("name", { ascending: true });
+        if (error) throw error;
+        return (data || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          contactPerson: s.contact_person || "",
+          phone: s.phone || "",
+          email: s.email || "",
+          address: s.address || "",
+          socialUrl: s.social_channel_url || "",
+          shippingFee: Number(s.shipping_fee_rmb || 0),
+        }));
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch suppliers from Supabase, using mock suppliers:", err);
+        return mockSuppliers;
+      }
     },
   });
 
@@ -87,22 +93,28 @@ export function usePartners() {
   const { data: agents = [], isLoading: loadingAgents } = useQuery<Agent[]>({
     queryKey: ["agents"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agents")
-        .select("*")
-        .is("deleted_at", null)
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return (data || []).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        contactPerson: s.contact_person || "",
-        phone: s.phone || "",
-        email: s.email || "",
-        address: s.address || "",
-        socialUrl: s.social_channel_url || "",
-        feePercent: Number(s.agent_fee_percent || 0),
-      }));
+      try {
+        const { data, error } = await supabase
+          .from("agents")
+          .select("*")
+          .is("deleted_at", null)
+          .order("name", { ascending: true });
+        if (error) throw error;
+        return (data || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          contactPerson: s.contact_person || "",
+          phone: s.phone || "",
+          email: s.email || "",
+          address: s.address || "",
+          socialUrl: s.social_channel_url || "",
+          feePercent: Number(s.agent_fee_percent || 0),
+        }));
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch agents from Supabase, using mock agents:", err);
+        return mockAgents;
+      }
     },
   });
 
@@ -164,21 +176,27 @@ export function usePartners() {
   const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery<Warehouse[]>({
     queryKey: ["warehouses"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("warehouses")
-        .select("*")
-        .is("deleted_at", null)
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return (data || []).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        contactPerson: s.contact_person || "",
-        phone: s.phone || "",
-        email: s.email || "",
-        address: s.address || "",
-        socialUrl: "",
-      })) as Warehouse[]; // Forcing cast since SocialURL isn't in Warehouse schema
+      try {
+        const { data, error } = await supabase
+          .from("warehouses")
+          .select("*")
+          .is("deleted_at", null)
+          .order("name", { ascending: true });
+        if (error) throw error;
+        return (data || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          contactPerson: s.contact_person || "",
+          phone: s.phone || "",
+          email: s.email || "",
+          address: s.address || "",
+          socialUrl: "",
+        })) as Warehouse[]; // Forcing cast since SocialURL isn't in Warehouse schema
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch warehouses from Supabase, using mock warehouses:", err);
+        return mockWarehouses;
+      }
     },
   });
 
@@ -236,22 +254,28 @@ export function usePartners() {
   const { data: retailers = [], isLoading: loadingRetailers } = useQuery<Retailer[]>({
     queryKey: ["retailers"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("retailers")
-        .select("*")
-        .is("deleted_at", null)
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return (data || []).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        contactPerson: s.contact_person || "",
-        phone: s.phone || "",
-        email: s.email || "",
-        address: s.address || "",
-        socialUrl: s.social_channel_url || "",
-        paymentMethod: s.preferred_payment_method || "Bank Transfer",
-      }));
+      try {
+        const { data, error } = await supabase
+          .from("retailers")
+          .select("*")
+          .is("deleted_at", null)
+          .order("name", { ascending: true });
+        if (error) throw error;
+        return (data || []).map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          contactPerson: s.contact_person || "",
+          phone: s.phone || "",
+          email: s.email || "",
+          address: s.address || "",
+          socialUrl: s.social_channel_url || "",
+          paymentMethod: s.preferred_payment_method || "Bank Transfer",
+        }));
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch retailers from Supabase, using mock retailers:", err);
+        return mockRetailers;
+      }
     },
   });
 

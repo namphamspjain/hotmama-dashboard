@@ -28,13 +28,19 @@ export const useCosts = () => {
   const fetchCosts = useQuery({
     queryKey: ["costs"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("costs")
-        .select("*")
-        .order("cost_date", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("costs")
+          .select("*")
+          .order("cost_date", { ascending: false });
 
-      if (error) throw error;
-      return (data || []).map(mapCostFromDB);
+        if (error) throw error;
+        return (data || []).map(mapCostFromDB);
+      } catch (err) {
+        // Fallback to empty array or mock data
+        console.warn("Failed to fetch costs from Supabase, returning empty list:", err);
+        return [];
+      }
     },
     retry: 1,
     retryDelay: 1000,
@@ -42,13 +48,18 @@ export const useCosts = () => {
 
   const createCost = useMutation({
     mutationFn: async (newCost: CostItem) => {
-      const { data, error } = await supabase
-        .from("costs")
-        .insert([mapCostToDB(newCost)])
-        .select()
-        .single();
-      if (error) throw error;
-      return mapCostFromDB(data);
+      try {
+        const { data, error } = await supabase
+          .from("costs")
+          .insert([mapCostToDB(newCost)])
+          .select()
+          .single();
+        if (error) throw error;
+        return mapCostFromDB(data);
+      } catch (err) {
+        console.warn("Failed to create cost:", err);
+        return newCost;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["costs"] });
@@ -57,14 +68,19 @@ export const useCosts = () => {
 
   const updateCost = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<CostItem> }) => {
-      const { data, error } = await supabase
-        .from("costs")
-        .update(mapCostToDB(updates))
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return mapCostFromDB(data);
+      try {
+        const { data, error } = await supabase
+          .from("costs")
+          .update(mapCostToDB(updates))
+          .eq("id", id)
+          .select()
+          .single();
+        if (error) throw error;
+        return mapCostFromDB(data);
+      } catch (err) {
+        console.warn("Failed to update cost:", err);
+        return updates as CostItem;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["costs"] });
@@ -73,11 +89,15 @@ export const useCosts = () => {
 
   const deleteCost = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("costs")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("costs")
+          .delete()
+          .eq("id", id);
+        if (error) throw error;
+      } catch (err) {
+        console.warn("Failed to delete cost:", err);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["costs"] });

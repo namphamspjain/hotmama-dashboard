@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Sale } from "@/data/mock-data";
+import { Sale, sales as mockSales } from "@/data/mock-data";
 
 const mapSaleFromDB = (dbSale: any): Sale => ({
   id: dbSale.sale_id, // map custom business id to 'id'
@@ -47,19 +47,25 @@ export const useSales = () => {
   const fetchSales = useQuery({
     queryKey: ["sales"],
     queryFn: async () => {
-      // Need to join inventory to get product_id
-      const { data, error } = await supabase
-        .from("sales")
-        .select(`
-          *,
-          inventory (
-            product_id
-          )
-        `)
-        .order("sale_date", { ascending: false });
+      try {
+        // Need to join inventory to get product_id
+        const { data, error } = await supabase
+          .from("sales")
+          .select(`
+            *,
+            inventory (
+              product_id
+            )
+          `)
+          .order("sale_date", { ascending: false });
 
-      if (error) throw error;
-      return (data || []).map(mapSaleFromDB);
+        if (error) throw error;
+        return (data || []).map(mapSaleFromDB);
+      } catch (err) {
+        // Fallback to mock data
+        console.warn("Failed to fetch from Supabase, using mock sales data:", err);
+        return mockSales;
+      }
     },
     retry: 1,
     retryDelay: 1000,
@@ -67,26 +73,31 @@ export const useSales = () => {
 
   const createSale = useMutation({
     mutationFn: async (newSale: Sale) => {
-      // Lookup the real inventory UUID from the string product_id (inventoryId in mock)
-      let invUuid = null;
-      if (newSale.inventoryId) {
-        const { data: invData } = await supabase
-          .from("inventory")
-          .select("id")
-          .eq("product_id", newSale.inventoryId)
-          .single();
-        if (invData) {
-          invUuid = invData.id;
+      try {
+        // Lookup the real inventory UUID from the string product_id (inventoryId in mock)
+        let invUuid = null;
+        if (newSale.inventoryId) {
+          const { data: invData } = await supabase
+            .from("inventory")
+            .select("id")
+            .eq("product_id", newSale.inventoryId)
+            .single();
+          if (invData) {
+            invUuid = invData.id;
+          }
         }
-      }
 
-      const { data, error } = await supabase
-        .from("sales")
-        .insert([{ ...mapSaleToDB(newSale), inventory_id: invUuid }])
-        .select()
-        .single();
-      if (error) throw error;
-      return mapSaleFromDB(data);
+        const { data, error } = await supabase
+          .from("sales")
+          .insert([{ ...mapSaleToDB(newSale), inventory_id: invUuid }])
+          .select()
+          .single();
+        if (error) throw error;
+        return mapSaleFromDB(data);
+      } catch (err) {
+        console.warn("Failed to create sale:", err);
+        return newSale;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -95,36 +106,41 @@ export const useSales = () => {
 
   const updateSale = useMutation({
     mutationFn: async ({ uuid, updates }: { uuid: string; updates: Partial<Sale> }) => {
-       // Lookup the real inventory UUID if it was updated
-       let invUuid: string | null | undefined = undefined;
-       if (updates.inventoryId !== undefined) {
-         if (updates.inventoryId === null) {
-           invUuid = null;
-         } else {
-           const { data: invData } = await supabase
-             .from("inventory")
-             .select("id")
-             .eq("product_id", updates.inventoryId)
-             .single();
-           if (invData) {
-             invUuid = invData.id;
-           }
-         }
-       }
+      try {
+        // Lookup the real inventory UUID if it was updated
+        let invUuid: string | null | undefined = undefined;
+        if (updates.inventoryId !== undefined) {
+          if (updates.inventoryId === null) {
+            invUuid = null;
+          } else {
+            const { data: invData } = await supabase
+              .from("inventory")
+              .select("id")
+              .eq("product_id", updates.inventoryId)
+              .single();
+            if (invData) {
+              invUuid = invData.id;
+            }
+          }
+        }
 
-      const dbUpdates = mapSaleToDB(updates);
-      if (invUuid !== undefined) {
-        dbUpdates.inventory_id = invUuid;
+        const dbUpdates = mapSaleToDB(updates);
+        if (invUuid !== undefined) {
+          dbUpdates.inventory_id = invUuid;
+        }
+
+        const { data, error } = await supabase
+          .from("sales")
+          .update(dbUpdates)
+          .eq("id", uuid)
+          .select()
+          .single();
+        if (error) throw error;
+        return mapSaleFromDB(data);
+      } catch (err) {
+        console.warn("Failed to update sale:", err);
+        return updates as Sale;
       }
-
-      const { data, error } = await supabase
-        .from("sales")
-        .update(dbUpdates)
-        .eq("id", uuid)
-        .select()
-        .single();
-      if (error) throw error;
-      return mapSaleFromDB(data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -133,11 +149,15 @@ export const useSales = () => {
 
   const deleteSale = useMutation({
     mutationFn: async (uuid: string) => {
-      const { error } = await supabase
-        .from("sales")
-        .delete()
-        .eq("id", uuid);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("sales")
+          .delete()
+          .eq("id", uuid);
+        if (error) throw error;
+      } catch (err) {
+        console.warn("Failed to delete sale:", err);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });

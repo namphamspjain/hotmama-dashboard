@@ -104,8 +104,8 @@ export default function CostPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "admin" || user?.role === "editor";
   const { costOfLossEntries, costOfLossTotal } = useInventory();
-  const { orders = [], isLoading: ordersLoading, isError: ordersError } = useOrders();
-  const { costs: dbCosts, isLoading: costsLoading, isError: costsError, createCost, updateCost, deleteCost } = useCosts();
+  const { orders = [], isLoading: ordersLoading, isError: ordersError, error: ordersErrorObj } = useOrders();
+  const { costs: dbCosts, isLoading: costsLoading, isError: costsError, error: costsErrorObj, createCost, updateCost, deleteCost } = useCosts();
 
   const isLoading = ordersLoading || costsLoading;
   const isError = ordersError || costsError;
@@ -337,23 +337,23 @@ export default function CostPage() {
     },
   ];
 
-  if (isLoading) {
+  if (isLoading || isError) {
     return (
-      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertTriangle className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">Error Loading Costs</h2>
+      <div className="p-8 space-y-4">
+        <h2 className="text-lg font-semibold">Costs Status</h2>
+        <div className="grid gap-2">
+          <div className="p-4 border rounded">
+            <h3>Orders</h3>
+            <p>Loading: {String(ordersLoading)}</p>
+            <p className={ordersError ? "text-red-500 font-bold" : ""}>Error: {ordersErrorObj?.message || String(ordersError)}</p>
+          </div>
+          <div className="p-4 border rounded">
+            <h3>Costs</h3>
+            <p>Loading: {String(costsLoading)}</p>
+            <p className={costsError ? "text-red-500 font-bold" : ""}>Error: {costsErrorObj?.message || String(costsError)}</p>
+          </div>
         </div>
-        <p className="text-muted-foreground">Failed to fetch costs or orders data. Please check your connection or RLS policies.</p>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
+        {!isLoading && <Button onClick={() => window.location.reload()}>Retry</Button>}
       </div>
     );
   }

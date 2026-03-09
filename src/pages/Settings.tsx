@@ -648,7 +648,7 @@ const SettingsPage = () => {
             <CardContent>
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead className="w-16">Photo</TableHead><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
+                  <TableHead className="w-16">Photo</TableHead><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Password</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredUsers.map(u => {
@@ -666,6 +666,21 @@ const SettingsPage = () => {
                         </TableCell>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-sm">
+                              {isVisible ? (u.password || "•••••••") : "•••••••"}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              onClick={() => setVisiblePasswords(prev => ({ ...prev, [u.id]: !prev[u.id] }))}
+                            >
+                              {isVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
                             {u.role}

@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   PanelLeft,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,7 +70,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo */}
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <Package className="h-6 w-6 shrink-0 text-sidebar-primary" />
+          <Flame className="h-6 w-6 shrink-0 text-sidebar-primary" />
           {!collapsed && <span className="text-lg font-bold text-sidebar-primary">Hotmama OMS</span>}
         </div>
 

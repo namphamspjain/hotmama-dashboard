@@ -127,6 +127,7 @@ export default function SalesPage() {
     sales,
     isLoading,
     isError,
+    error,
     createSale,
     updateSale,
     deleteSale,
@@ -355,23 +356,15 @@ export default function SalesPage() {
     { label: "Refunded", value: metrics.refunded.toString(), icon: RotateCcw, sub: "sales" },
   ];
 
-  if (isLoading) {
+  if (isLoading || isError) {
     return (
-      <div className="flex h-[calc(100vh-120px)] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex h-[calc(100vh-120px)] w-full flex-col items-center justify-center space-y-4">
-        <div className="flex items-center gap-2 text-destructive">
-          <AlertTriangle className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">Error Loading Sales</h2>
+      <div className="p-8 space-y-4">
+        <h2 className="text-lg font-semibold">Sales Status</h2>
+        <div className="p-4 border rounded">
+          <p>Loading: {String(isLoading)}</p>
+          <p className={isError ? "text-red-500 font-bold" : ""}>Error: {error?.message || String(isError)}</p>
         </div>
-        <p className="text-muted-foreground">Failed to fetch sales data. Please check your connection or RLS policies.</p>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
+        {!isLoading && <Button onClick={() => window.location.reload()}>Retry</Button>}
       </div>
     );
   }

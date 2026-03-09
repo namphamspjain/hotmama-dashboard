@@ -7,6 +7,7 @@ interface InventoryContextValue {
   items: InventoryItem[];
   isLoading: boolean;
   isError: boolean;
+  error: Error | null;
   createInventoryItem: any;
   updateInventoryItem: any;
   deleteInventoryItem: any;
@@ -23,6 +24,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     inventory: items, 
     isLoading, 
     isError,
+    error,
     createInventoryItem, 
     updateInventoryItem, 
     deleteInventoryItem 
@@ -67,13 +69,14 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       items, 
       isLoading,
       isError,
+      error,
       createInventoryItem,
       updateInventoryItem,
       deleteInventoryItem,
       costOfLossEntries, 
       costOfLossTotal 
     }),
-    [items, isLoading, isError, createInventoryItem, updateInventoryItem, deleteInventoryItem, costOfLossEntries, costOfLossTotal],
+    [items, isLoading, isError, error, createInventoryItem, updateInventoryItem, deleteInventoryItem, costOfLossEntries, costOfLossTotal],
   );
 
   return (
